@@ -1,0 +1,988 @@
+C51 COMPILER V9.00   NANDFLASH                                                             05/31/2015 23:23:16 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE NANDFLASH
+OBJECT MODULE PLACED IN NandFlash.OBJ
+COMPILER INVOKED BY: D:\learning\C51\BIN\C51.EXE NandFlash.c LARGE BROWSE DEBUG OBJECTEXTEND
+
+line level    source
+
+   1          
+   2          #include "C8051F340.h"
+   3          
+   4          #include "DataTypeDef.h"
+   5          #include "string.h"
+   6          #include <stdio.h>
+   7          #include <intrins.h>
+   8          
+   9          //sfr P4 = 0xC0;
+  10          
+  11          sbit NandFlash_CLE= P1^4;
+  12          sbit NandFlash_ALE = P1^1;
+  13          sbit NandFlash_RB = P1^2;
+  14          sbit NandFlash_CS = P1^5;
+  15          sbit NandFlash_WR = P1^7;
+  16          sbit NandFlash_RD = P1^6;
+  17          
+  18          #define Nandflash_CMD_LATCH_HIGH()      NandFlash_CLE = 1 
+  19          #define Nandflash_CMD_LATCH_LOW()       NandFlash_CLE = 0
+  20          ///////////////////////////////////////////////////////////////////////
+  21          #define Nandflash_ADDR_LATCH_HIGH()      NandFlash_ALE = 1 
+  22          #define Nandflash_ADDR_LATCH_LOW()       NandFlash_ALE = 0
+  23          
+  24          ///////////////////////////////////////////////////////////////////////
+  25          //#define ADD_LATCH_HIGH()      (*AT91C_PIOA_SODR |= ADD_LATCH) 
+  26          //#define ADD_LATCH_LOW()       (*AT91C_PIOA_CODR |= ADD_LATCH)
+  27          ///////////////////////////////////////////////////////////////////////
+  28          
+  29          #define NWRITE_HIGH()         NandFlash_WR = 1
+  30          #define NWRITE_LOW()          NandFlash_WR = 0
+  31          ///////////////////////////////////////////////////////////////////////
+  32          #define NREAD_HIGH()          NandFlash_RD = 1
+  33          #define NREAD_LOW()           NandFlash_RD = 0
+  34          ///////////////////////////////////////////////////////////////////////
+  35          ///////////////////////////////////////////////////////////////////////
+  36          #define NF_CS_HIGH()          NandFlash_CS = 1
+  37          #define NF_CS_LOW()           NandFlash_CS = 0
+  38          
+  39          #define NF_DataPort P4
+  40          uchar xdata ucNFPageBuff[2048];         //NandFlash读写操作缓冲区
+  41          
+  42          extern void WriteOneByte(unsigned char ucWriteData);
+  43          
+  44          void Delay(uchar ucCount);
+  45          void ComShowString(uchar *ucPrintfString);
+  46          void ComShowUChar(unsigned char value);
+  47          
+  48          #if 0
+              void ComShowString(uchar *ucPrintfString)
+              {
+                      while(*ucPrintfString)
+                      {
+                              WriteOneByte(*ucPrintfString++);
+                      }
+              }
+C51 COMPILER V9.00   NANDFLASH                                                             05/31/2015 23:23:16 PAGE 2   
+
+              #endif
+  57          
+  58          #if 0
+              code  unsigned char lcd_hexchars[17] = "0123456789abcdef";
+              void ComShowUChar(unsigned char value)
+              {
+                      WriteOneByte(lcd_hexchars[(value>>4)&0xf]);
+                      WriteOneByte(lcd_hexchars[(value)&0xf]);
+              }
+              #endif
+  66          
+  67          void port_WriteDataNoAdd(uchar ucWriteData)
+  68          {
+  69   1      
+  70   1              P4MDOUT = 0xff;                 //配置为推挽输出
+  71   1              //Delay(1);
+  72   1      
+  73   1              NF_DataPort = ucWriteData;
+  74   1      
+  75   1              NWRITE_LOW();
+  76   1              _nop_(); 
+  77   1      //      _nop_(); 
+  78   1              //Delay(1);
+  79   1      //      Delay(1);
+  80   1              NWRITE_HIGH();  
+  81   1      }
+  82          
+  83          //----------------------------------------------------------------------
+  84          uchar port_ReadDataNoAdd(void)
+  85          {
+  86   1              uchar  temp8;
+  87   1         
+  88   1              P4MDOUT = 0x00;                 //配置为开漏输出
+  89   1              P4 = 0xff;              //设置为开漏有效状态
+  90   1         //Delay(1);
+  91   1              NREAD_LOW();
+  92   1              //Delay(1);
+  93   1              _nop_();                //如果没有这个延时，读取数据会出错。
+  94   1      //      _nop_(); 
+  95   1      
+  96   1              temp8 = NF_DataPort;   
+  97   1              NREAD_HIGH();
+  98   1         
+  99   1         return temp8;  
+ 100   1      }
+ 101          
+ 102          #define COMMAND                         0x03    
+ 103          #define ADDRESS                         0x05    
+ 104          #define D_DATA                          0x01
+ 105          #define INACTIVE                        0x09    
+ 106          
+ 107          
+ 108          
+ 109          void NandFlash_Reset(void)                                                   //flash reset
+ 110          { 
+ 111   1              unsigned int i;
+ 112   1      
+ 113   1              NF_CS_LOW();
+ 114   1              Nandflash_CMD_LATCH_HIGH();
+ 115   1              Nandflash_ADDR_LATCH_LOW();
+ 116   1              
+ 117   1              port_WriteDataNoAdd(0xff);
+C51 COMPILER V9.00   NANDFLASH                                                             05/31/2015 23:23:16 PAGE 3   
+
+ 118   1              NF_CS_HIGH();
+ 119   1      
+ 120   1              for (i=0; i<3000; i++) ;                                         //delay        
+ 121   1      }
+ 122          
+ 123          #if 0
+              void NandFlash_ReadID(uchar *IDBuff)
+              {
+                      uchar xdata ucIDBuff[5];
+              
+                      NF_CS_LOW();
+              
+                      Nandflash_CMD_LATCH_HIGH();
+                      Nandflash_ADDR_LATCH_LOW();
+                      port_WriteDataNoAdd(0x90);
+              
+                      Nandflash_CMD_LATCH_LOW();
+                      Nandflash_ADDR_LATCH_HIGH();
+                      port_WriteDataNoAdd(0x00);
+              
+                      Nandflash_CMD_LATCH_LOW();
+                      Nandflash_ADDR_LATCH_LOW();
+              
+              //      P0= 0xff;
+                      P4MDOUT = 0x00;                 //配置为开漏输出
+              
+                      Delay(1);
+                      ucIDBuff[0] = port_ReadDataNoAdd();
+                      ucIDBuff[1] = port_ReadDataNoAdd();
+                      ucIDBuff[2] = port_ReadDataNoAdd();
+                      ucIDBuff[3] = port_ReadDataNoAdd();
+                      ucIDBuff[4] = port_ReadDataNoAdd();
+                      memcpy(IDBuff,ucIDBuff,5);
+              
+                      NF_CS_HIGH();
+              }
+              
+              #endif
+ 156          
+ 157          #if 0
+              //检查NandFlash芯片是否能正常通讯
+              bool bCheckNandFlashDevice(void)
+              {
+                      uchar ucIDBuff[5];
+              
+                      NandFlash_Reset();
+                      NandFlash_ReadID(ucIDBuff);
+              
+              //      ComShowString("\r\nRead ID Value is ");
+              //      ComShowUChar(ucIDBuff[0]);
+              //      ComShowUChar(ucIDBuff[1]);
+              //      ComShowUChar(ucIDBuff[2]);
+              //      ComShowUChar(ucIDBuff[3]);
+              //      ComShowString("\r\n ");
+              //
+                      if((ucIDBuff[0] == 0xEC)&& (ucIDBuff[1] == 0xF1) && (ucIDBuff[3] == 0x95))
+                      {
+                              ComShowString("Check NandFlash OK\r\n");
+                              return(true);
+                      }
+                      else
+                      {
+C51 COMPILER V9.00   NANDFLASH                                                             05/31/2015 23:23:16 PAGE 4   
+
+                              return(false);
+                      }       
+              }
+              #endif
+ 184          
+ 185          //从Flash中读取1个扇区内容到缓冲区
+ 186          unsigned char xdata Sector_Buf[512];            //文件缓冲区。
+ 187          //char xdata Sector_AdditionalDataBuff[64];             //扇区中的附加数据。
+ 188          unsigned int  uiAddressColumn,uiAddressRow;             //列地址0-11，行地址0-15
+ 189          //检查坏块数据，返回检查中发现的坏块总数量。
+ 190          #if 0
+              uint  NandFlash_CheckBadBlock(void)
+              {
+                      uchar xdata ucReadInvalidBlockFlagData;
+                      uint xdata uiBadBlockCount;
+                      uint xdata uiCount;
+              
+              
+                      NF_CS_LOW();
+              
+                      uiBadBlockCount = 0;
+                              
+                      for(uiCount=1; uiCount<1024; uiCount++)
+                      {
+                              uiAddressColumn = 2048;                 //读取数据的地址
+                              uiAddressRow = uiCount*64;              //每块有64页
+              
+                              //测试第1块是否有坏块
+                              Nandflash_CMD_LATCH_HIGH();                     //发送命令到芯片
+                              Nandflash_ADDR_LATCH_LOW();
+                              port_WriteDataNoAdd(0x00);
+                      
+                              Nandflash_CMD_LATCH_LOW();
+                              Nandflash_ADDR_LATCH_HIGH();            //发送4位地址数据
+                              port_WriteDataNoAdd(uiAddressColumn & 0xFF);
+                              port_WriteDataNoAdd(uiAddressColumn>>8);
+                              port_WriteDataNoAdd(uiAddressRow & 0xFF);
+                              port_WriteDataNoAdd(uiAddressRow>>8);
+                      
+                              Nandflash_CMD_LATCH_HIGH();                     //发送命令到芯片
+                              Nandflash_ADDR_LATCH_LOW();
+                              port_WriteDataNoAdd(0x30);
+                              NandFlash_RB =1;
+                              Delay(1);
+                      
+                              while(NandFlash_RB == 0);               //等待BUSY信号
+                      
+                      
+                              Nandflash_CMD_LATCH_LOW();
+                              Nandflash_ADDR_LATCH_LOW();
+                      
+                      //      P0= 0xff;
+                              Delay(1);
+                              ucReadInvalidBlockFlagData = port_ReadDataNoAdd();
+                      
+                              if(ucReadInvalidBlockFlagData != 0xFF)
+                              {
+                                       uiBadBlockCount ++;
+                                       continue;
+                              }
+              
+                              //测试第2块是否有坏块
+C51 COMPILER V9.00   NANDFLASH                                                             05/31/2015 23:23:16 PAGE 5   
+
+                              uiAddressRow++;                 //每1块的第2页
+                              Nandflash_CMD_LATCH_HIGH();                     //发送命令到芯片
+                              Nandflash_ADDR_LATCH_LOW();
+                              port_WriteDataNoAdd(0x00);
+                      
+                              Nandflash_CMD_LATCH_LOW();
+                              Nandflash_ADDR_LATCH_HIGH();            //发送4位地址数据
+                              port_WriteDataNoAdd(uiAddressColumn & 0xFF);
+                              port_WriteDataNoAdd(uiAddressColumn>>8);
+                              port_WriteDataNoAdd(uiAddressRow & 0xFF);
+                              port_WriteDataNoAdd(uiAddressRow>>8);
+                      
+                              Nandflash_CMD_LATCH_HIGH();                     //发送命令到芯片
+                              Nandflash_ADDR_LATCH_LOW();
+                              port_WriteDataNoAdd(0x30);
+                              NandFlash_RB =1;
+                              Delay(1);
+                      
+                              while(NandFlash_RB == 0);               //等待BUSY信号
+                      
+                      
+                              Nandflash_CMD_LATCH_LOW();
+                              Nandflash_ADDR_LATCH_LOW();
+                      
+              //              P0= 0xff;
+                              Delay(1);
+                              ucReadInvalidBlockFlagData = port_ReadDataNoAdd();
+                      
+                              if(ucReadInvalidBlockFlagData != 0xFF)
+                              {
+                                       uiBadBlockCount ++;
+                              }
+                      }
+              
+                      NF_CS_HIGH();
+              
+                      return(uiBadBlockCount);
+              }
+              
+              #endif
+ 282          
+ 283          //擦除指定块。
+ 284          //1G08总共有1024个块。
+ 285          bool NandFlash_EraseBlock(uint uiBlockNo)
+ 286          {
+ 287   1              uchar ucReadStatusData;
+ 288   1      
+ 289   1              NF_CS_LOW();
+ 290   1      
+ 291   1              uiAddressRow = uiBlockNo*64;                    //每块有64页
+ 292   1      
+ 293   1              Nandflash_CMD_LATCH_HIGH();                     //发送自动块擦除设置命令到芯片
+ 294   1              Nandflash_ADDR_LATCH_LOW();
+ 295   1              port_WriteDataNoAdd(0x60);
+ 296   1      
+ 297   1              Nandflash_CMD_LATCH_LOW();
+ 298   1              Nandflash_ADDR_LATCH_HIGH();            //发送2位地址数据
+ 299   1              port_WriteDataNoAdd(uiAddressRow & 0xFF);
+ 300   1              port_WriteDataNoAdd(uiAddressRow>>8);
+ 301   1      
+ 302   1              Nandflash_CMD_LATCH_HIGH();                     //发送擦除命令到芯片
+ 303   1              Nandflash_ADDR_LATCH_LOW();
+C51 COMPILER V9.00   NANDFLASH                                                             05/31/2015 23:23:16 PAGE 6   
+
+ 304   1              port_WriteDataNoAdd(0xD0);                      
+ 305   1              NandFlash_RB =1;
+ 306   1              Delay(1);
+ 307   1      
+ 308   1              while(NandFlash_RB == 0);               //等待BUSY信号
+ 309   1      
+ 310   1              Nandflash_CMD_LATCH_HIGH();                     //发送擦除命令到芯片
+ 311   1              Nandflash_ADDR_LATCH_LOW();
+ 312   1              port_WriteDataNoAdd(0x70);                      
+ 313   1      
+ 314   1              //读取擦除操作状态位
+ 315   1              Nandflash_CMD_LATCH_LOW();
+ 316   1              Nandflash_ADDR_LATCH_LOW();
+ 317   1      
+ 318   1      //      P0= 0xff;
+ 319   1              Delay(1);
+ 320   1              ucReadStatusData = port_ReadDataNoAdd();
+ 321   1              
+ 322   1              NF_CS_HIGH();
+ 323   1      
+ 324   1              if(ucReadStatusData & 0x01)               //D0为1时表明擦除操作失败
+ 325   1              {
+ 326   2                      return(false);
+ 327   2              }
+ 328   1              else
+ 329   1              {
+ 330   2                      return(true);
+ 331   2              }
+ 332   1      
+ 333   1      }
+ 334          code FlashBadBlockTabMask[8] = {0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80};
+ 335          //void MCU_ReadSector( INT16U sector, INT8U *buffer );
+ 336          //void MCU_WriteSector( INT16U sector, INT8U *buffer );
+ 337          //擦除所有存放数据的块
+ 338          #if 0
+              bool NandFlash_EraseAllDataBlock(void)
+              {
+                      uint uiCount;
+                      uint uiOffset;
+                      uchar ucModeValue;
+              
+              
+                      ComShowString("\r\n Start Erase All Block");
+              //      MCU_ReadSector(0,Sector_Buf);           //读取地址所在的内容到内存
+              
+                      for(uiOffset = 256; uiOffset <256+128; uiOffset++)
+                      {
+                              Sector_Buf[uiOffset] = 0x00;            //将坏块记录表全部清零
+                      }
+              
+                      for(uiCount=0; uiCount<1024; uiCount++)
+                      {
+                              if(NandFlash_EraseBlock(uiCount) == false)
+                              {
+                                      ComShowString("\r\nErase Err! Address is :");
+                                      ComShowUChar(uiCount>>8);
+                                      ComShowUChar(uiCount);
+              //                      ComShowString("\r\nErase End\r\n");
+              
+                                      uiOffset =  uiCount/8;
+                                      ucModeValue     = uiCount%8;
+                                      Sector_Buf[uiOffset+256] |= FlashBadBlockTabMask[ucModeValue]; 
+C51 COMPILER V9.00   NANDFLASH                                                             05/31/2015 23:23:16 PAGE 7   
+
+              //              return(false);
+                              }
+                              else
+                              {
+              //              ComShowString("Erase One Block Ok\r\n");
+                              }
+                      }
+              
+              //      MCU_WriteSector(0,Sector_Buf);  //更新闪存内容
+              
+                      return(true);
+              }
+              
+              //读取扇区的内容到缓冲区
+              //每个设备=1024个块，每个块为64页，每面为2K
+              void   NandFlash_ReadSector(ulong ulSectorNo)
+              {
+                      uint uiCount;
+              
+                      uiAddressColumn = (ulSectorNo%4)*512;            //读取数据的地址
+                      uiAddressRow = ulSectorNo/4;                            //页地址
+              
+                //    printf("uiAddressColumn = %d\r\n",uiAddressColumn);
+                      NF_CS_LOW();
+              
+                      Nandflash_CMD_LATCH_HIGH();                     //发送命令到芯片
+                      Nandflash_ADDR_LATCH_LOW();
+                      port_WriteDataNoAdd(0x00);
+              
+                      Nandflash_CMD_LATCH_LOW();
+                      Nandflash_ADDR_LATCH_HIGH();            //发送4位地址数据
+                      port_WriteDataNoAdd(uiAddressColumn & 0xFF);
+                      port_WriteDataNoAdd(uiAddressColumn>>8);
+                      port_WriteDataNoAdd(uiAddressRow & 0xFF);
+                      port_WriteDataNoAdd(uiAddressRow>>8);
+              
+                      Nandflash_CMD_LATCH_HIGH();                     //发送命令到芯片
+                      Nandflash_ADDR_LATCH_LOW();
+                      port_WriteDataNoAdd(0x30);
+                      NandFlash_RB =1;
+              //      Delay(1);
+              
+                      while(NandFlash_RB == 0);               //等待BUSY信号变为空闲
+                      //页数据已经读取到芯片的Buffer中
+                      
+              //      Nandflash_CMD_LATCH_HIGH();                     //发送随机读命令到芯片
+              //      Nandflash_ADDR_LATCH_LOW();
+              //      port_WriteDataNoAdd(0x05);
+              //
+              //      Nandflash_CMD_LATCH_LOW();
+              //      Nandflash_ADDR_LATCH_HIGH();            //发送2位列地址数据
+              //      port_WriteDataNoAdd(uiAddressColumn & 0xFF);
+              //      port_WriteDataNoAdd(uiAddressColumn>>8);
+              //
+              //      Nandflash_CMD_LATCH_HIGH();                     //发送命令到芯片
+              //      Nandflash_ADDR_LATCH_LOW();
+              //      port_WriteDataNoAdd(0x0E0);
+              
+                      P4MDOUT = 0x00;                 //配置为开漏输出
+                      P4 = 0xff;              //设置为开漏有效状态
+              
+                      Nandflash_CMD_LATCH_LOW();
+C51 COMPILER V9.00   NANDFLASH                                                             05/31/2015 23:23:16 PAGE 8   
+
+                      Nandflash_ADDR_LATCH_LOW();
+              
+              //      Delay(1);
+              
+                      for(uiCount=0; uiCount<512; uiCount++)
+              //      for(uiCount=0; uiCount<528; uiCount++)
+                      {
+              //              Sector_Buf[uiCount] = port_ReadDataNoAdd();
+                              NREAD_LOW();
+                              _nop_();                //如果没有这个延时，读取数据会出错。
+              
+                              Sector_Buf[uiCount] = NF_DataPort;   
+                              NREAD_HIGH();   
+                      }
+                      NF_CS_HIGH();   
+              }
+              #endif
+ 445          
+ 446          
+ 447          //读取扇区的内容到缓冲区
+ 448          //每个设备=1024个块，每个块为64页，每面为2K
+ 449          void   NF_ReadSectorToBuff(ulong ulSectorNo,uchar *ucDataBuffer)
+ 450          {
+ 451   1              uint uiCount;
+ 452   1      
+ 453   1              uiAddressColumn = (ulSectorNo%4)*512;            //读取数据的地址
+ 454   1              uiAddressRow = ulSectorNo/4;                            //页地址
+ 455   1      
+ 456   1        //    printf("uiAddressColumn = %d\r\n",uiAddressColumn);
+ 457   1              NF_CS_LOW();
+ 458   1      
+ 459   1              Nandflash_CMD_LATCH_HIGH();                     //发送命令到芯片
+ 460   1              Nandflash_ADDR_LATCH_LOW();
+ 461   1              port_WriteDataNoAdd(0x00);
+ 462   1      
+ 463   1              Nandflash_CMD_LATCH_LOW();
+ 464   1              Nandflash_ADDR_LATCH_HIGH();            //发送4位地址数据
+ 465   1              port_WriteDataNoAdd(uiAddressColumn & 0xFF);
+ 466   1              port_WriteDataNoAdd(uiAddressColumn>>8);
+ 467   1              port_WriteDataNoAdd(uiAddressRow & 0xFF);
+ 468   1              port_WriteDataNoAdd(uiAddressRow>>8);
+ 469   1      
+ 470   1              Nandflash_CMD_LATCH_HIGH();                     //发送命令到芯片
+ 471   1              Nandflash_ADDR_LATCH_LOW();
+ 472   1              port_WriteDataNoAdd(0x30);
+ 473   1              NandFlash_RB =1;
+ 474   1      //      Delay(1);
+ 475   1      
+ 476   1              while(NandFlash_RB == 0);               //等待BUSY信号变为空闲
+ 477   1              //页数据已经读取到芯片的Buffer中
+ 478   1              
+ 479   1      //      Nandflash_CMD_LATCH_HIGH();                     //发送随机读命令到芯片
+ 480   1      //      Nandflash_ADDR_LATCH_LOW();
+ 481   1      //      port_WriteDataNoAdd(0x05);
+ 482   1      //
+ 483   1      //      Nandflash_CMD_LATCH_LOW();
+ 484   1      //      Nandflash_ADDR_LATCH_HIGH();            //发送2位列地址数据
+ 485   1      //      port_WriteDataNoAdd(uiAddressColumn & 0xFF);
+ 486   1      //      port_WriteDataNoAdd(uiAddressColumn>>8);
+ 487   1      //
+ 488   1      //      Nandflash_CMD_LATCH_HIGH();                     //发送命令到芯片
+ 489   1      //      Nandflash_ADDR_LATCH_LOW();
+C51 COMPILER V9.00   NANDFLASH                                                             05/31/2015 23:23:16 PAGE 9   
+
+ 490   1      //      port_WriteDataNoAdd(0x0E0);
+ 491   1      
+ 492   1              P4MDOUT = 0x00;                 //配置为开漏输出
+ 493   1              P4 = 0xff;              //设置为开漏有效状态
+ 494   1      
+ 495   1              Nandflash_CMD_LATCH_LOW();
+ 496   1              Nandflash_ADDR_LATCH_LOW();
+ 497   1      
+ 498   1      //      Delay(1);
+ 499   1      
+ 500   1              for(uiCount=0; uiCount<512; uiCount++)
+ 501   1      //      for(uiCount=0; uiCount<528; uiCount++)
+ 502   1              {
+ 503   2      //              Sector_Buf[uiCount] = port_ReadDataNoAdd();
+ 504   2                      NREAD_LOW();
+ 505   2                      _nop_();                //如果没有这个延时，读取数据会出错。
+ 506   2      
+ 507   2                      *ucDataBuffer++= NF_DataPort;   
+ 508   2                      NREAD_HIGH();   
+ 509   2              }
+ 510   1              NF_CS_HIGH();   
+ 511   1      }
+ 512          
+ 513          
+ 514          
+ 515          //读取扇区的内容到缓冲区
+ 516          //每个设备=1024个块，每个块为64页，每面为2K
+ 517          void   NF_ReadPage(ulong ulSectorNo)
+ 518          {
+ 519   1              uint uiCount;
+ 520   1      
+ 521   1              uiAddressColumn = (ulSectorNo%4)*512;            //读取数据的地址
+ 522   1              uiAddressRow = ulSectorNo/4;                            //页地址
+ 523   1      
+ 524   1        //    printf("uiAddressColumn = %d\r\n",uiAddressColumn);
+ 525   1              NF_CS_LOW();
+ 526   1      
+ 527   1              Nandflash_CMD_LATCH_HIGH();                     //发送命令到芯片
+ 528   1              Nandflash_ADDR_LATCH_LOW();
+ 529   1              port_WriteDataNoAdd(0x00);
+ 530   1      
+ 531   1              Nandflash_CMD_LATCH_LOW();
+ 532   1              Nandflash_ADDR_LATCH_HIGH();            //发送4位地址数据
+ 533   1              port_WriteDataNoAdd(uiAddressColumn & 0xFF);
+ 534   1              port_WriteDataNoAdd(uiAddressColumn>>8);
+ 535   1              port_WriteDataNoAdd(uiAddressRow & 0xFF);
+ 536   1              port_WriteDataNoAdd(uiAddressRow>>8);
+ 537   1      
+ 538   1              Nandflash_CMD_LATCH_HIGH();                     //发送命令到芯片
+ 539   1              Nandflash_ADDR_LATCH_LOW();
+ 540   1              port_WriteDataNoAdd(0x30);
+ 541   1              NandFlash_RB =1;
+ 542   1      //      Delay(1);
+ 543   1      
+ 544   1              while(NandFlash_RB == 0);               //等待BUSY信号变为空闲
+ 545   1              //页数据已经读取到芯片的Buffer中
+ 546   1              
+ 547   1      //      Nandflash_CMD_LATCH_HIGH();                     //发送随机读命令到芯片
+ 548   1      //      Nandflash_ADDR_LATCH_LOW();
+ 549   1      //      port_WriteDataNoAdd(0x05);
+ 550   1      //
+ 551   1      //      Nandflash_CMD_LATCH_LOW();
+C51 COMPILER V9.00   NANDFLASH                                                             05/31/2015 23:23:16 PAGE 10  
+
+ 552   1      //      Nandflash_ADDR_LATCH_HIGH();            //发送2位列地址数据
+ 553   1      //      port_WriteDataNoAdd(uiAddressColumn & 0xFF);
+ 554   1      //      port_WriteDataNoAdd(uiAddressColumn>>8);
+ 555   1      //
+ 556   1      //      Nandflash_CMD_LATCH_HIGH();                     //发送命令到芯片
+ 557   1      //      Nandflash_ADDR_LATCH_LOW();
+ 558   1      //      port_WriteDataNoAdd(0x0E0);
+ 559   1      
+ 560   1              P4MDOUT = 0x00;                 //配置为开漏输出
+ 561   1              P4 = 0xff;              //设置为开漏有效状态
+ 562   1      
+ 563   1              Nandflash_CMD_LATCH_LOW();
+ 564   1              Nandflash_ADDR_LATCH_LOW();
+ 565   1      
+ 566   1      //      Delay(1);
+ 567   1      
+ 568   1              for(uiCount=0; uiCount<2048; uiCount++)
+ 569   1      //      for(uiCount=0; uiCount<528; uiCount++)
+ 570   1              {
+ 571   2      //              Sector_Buf[uiCount] = port_ReadDataNoAdd();
+ 572   2                      NREAD_LOW();
+ 573   2                      _nop_();                //如果没有这个延时，读取数据会出错。
+ 574   2      
+ 575   2                      ucNFPageBuff[uiCount]= NF_DataPort;   
+ 576   2                      NREAD_HIGH();   
+ 577   2              }
+ 578   1              NF_CS_HIGH();   
+ 579   1      }
+ 580          
+ 581          
+ 582          #define C_FileDataStartBlockNo   1
+ 583          #if 0
+              //1024个块，每块64页，每页2K
+              //此函数完成页写功能，每次写1页即4个扇区的数据
+              void   NandFlash_WritePageStart(ulong ulSectorNo)
+              {
+              
+              //      ulSectorNo += 64;                               //留出64页用于记录文件索引相关信息
+                      uiAddressColumn = (ulSectorNo%4)*512;            //读取数据的地址
+                      uiAddressRow = ulSectorNo/4  ;                  //页地址，
+              
+                      NF_CS_LOW();
+              
+                      Nandflash_CMD_LATCH_HIGH();                     //发送命令到芯片
+                      Nandflash_ADDR_LATCH_LOW();
+                      port_WriteDataNoAdd(0x80);
+              
+                      Nandflash_CMD_LATCH_LOW();
+                      Nandflash_ADDR_LATCH_HIGH();            //发送4位地址数据
+                      port_WriteDataNoAdd(uiAddressColumn & 0xFF);
+                      port_WriteDataNoAdd(uiAddressColumn>>8);
+                      port_WriteDataNoAdd(uiAddressRow & 0xFF);
+                      port_WriteDataNoAdd(uiAddressRow>>8);
+              
+                      Nandflash_CMD_LATCH_LOW();
+                      Nandflash_ADDR_LATCH_LOW();
+              
+              }
+               
+              void   NandFlash_WriteOneSectorDataToPage(void)
+              {
+                      uint uiCount;
+C51 COMPILER V9.00   NANDFLASH                                                             05/31/2015 23:23:16 PAGE 11  
+
+              
+                      for(uiCount=0; uiCount<512; uiCount++)
+                      {
+                              NF_DataPort = Sector_Buf[uiCount];      
+                              NWRITE_LOW(); 
+              //              Delay(1);
+                              _nop_();
+                              NWRITE_HIGH();  
+                      }
+                      NWRITE_HIGH();  
+              
+              }
+              #endif
+ 627          
+ 628          bool  NandFlash_WritePageEnd(void)
+ 629          {
+ 630   1              uchar ucReadStatusData;
+ 631   1      
+ 632   1              Nandflash_CMD_LATCH_HIGH();                     //发送命令到芯片
+ 633   1              Nandflash_ADDR_LATCH_LOW();
+ 634   1              port_WriteDataNoAdd(0x10);
+ 635   1              NandFlash_RB =1;
+ 636   1      //      Delay(1);
+ 637   1      
+ 638   1              while(NandFlash_RB == 0);               //等待BUSY信号变为空闲
+ 639   1      
+ 640   1              Nandflash_CMD_LATCH_HIGH();                     //发送70命令到芯片
+ 641   1              Nandflash_ADDR_LATCH_LOW();
+ 642   1              port_WriteDataNoAdd(0x70);                      
+ 643   1      
+ 644   1              //读取操作状态位
+ 645   1              Nandflash_CMD_LATCH_LOW();
+ 646   1              Nandflash_ADDR_LATCH_LOW();
+ 647   1      
+ 648   1              P0= 0xff;
+ 649   1      //      Delay(1);
+ 650   1              ucReadStatusData = port_ReadDataNoAdd();
+ 651   1              
+ 652   1              NF_CS_HIGH();
+ 653   1      
+ 654   1              if(ucReadStatusData & 0x01)               //D0为1时表明操作失败
+ 655   1              {
+ 656   2                      return(false);
+ 657   2              }
+ 658   1              else
+ 659   1              {
+ 660   2                      return(true);
+ 661   2              }
+ 662   1      }
+ 663          //NandFlash页写操作，1页2K字节，写之前将扇区对应的数据写入页缓冲存储器
+ 664          bool NandFlash_WritePage(ulong ulSectorNo)
+ 665          {
+ 666   1              uint uiCount;
+ 667   1      
+ 668   1       //启动页编程操作并写入地址
+ 669   1              uiAddressColumn = (ulSectorNo%4)*512;            //读取数据的地址
+ 670   1              uiAddressRow = ulSectorNo/4  ;                  //页地址，
+ 671   1      
+ 672   1              NF_CS_LOW();
+ 673   1      
+ 674   1              Nandflash_CMD_LATCH_HIGH();                     //发送命令到芯片
+ 675   1              Nandflash_ADDR_LATCH_LOW();
+C51 COMPILER V9.00   NANDFLASH                                                             05/31/2015 23:23:16 PAGE 12  
+
+ 676   1              port_WriteDataNoAdd(0x80);
+ 677   1      
+ 678   1              Nandflash_CMD_LATCH_LOW();
+ 679   1              Nandflash_ADDR_LATCH_HIGH();            //发送4位地址数据
+ 680   1              port_WriteDataNoAdd(uiAddressColumn & 0xFF);
+ 681   1              port_WriteDataNoAdd(uiAddressColumn>>8);
+ 682   1              port_WriteDataNoAdd(uiAddressRow & 0xFF);
+ 683   1              port_WriteDataNoAdd(uiAddressRow>>8);
+ 684   1      
+ 685   1              Nandflash_CMD_LATCH_LOW();
+ 686   1              Nandflash_ADDR_LATCH_LOW();
+ 687   1      
+ 688   1      //填充数据到芯片的写缓冲区
+ 689   1              for(uiCount=0; uiCount<2048; uiCount++)
+ 690   1              {
+ 691   2                      NWRITE_HIGH();  
+ 692   2                      NF_DataPort = ucNFPageBuff[uiCount];    
+ 693   2                      NWRITE_LOW(); 
+ 694   2      //              Delay(1);
+ 695   2      //              _nop_();
+ 696   2      //              NWRITE_HIGH();  
+ 697   2              }
+ 698   1              NWRITE_HIGH();  
+ 699   1      
+ 700   1         return(NandFlash_WritePageEnd());
+ 701   1      }
+ 702          
+ 703          #if 0
+              bool NandFlash_WriteScector(ulong ulSectorNo)
+              {
+                      uchar ucSectorIndexNo;  //扇区在页中的索引号
+                      uint uiCount;
+                      ucSectorIndexNo = ulSectorNo%4 ;
+                      if(ucSectorIndexNo == 0)
+                      {
+                              NF_ReadSectorToBuff(ulSectorNo+1,ucNFPageBuff+512);     
+                              NF_ReadSectorToBuff(ulSectorNo+2,ucNFPageBuff+1024);    
+                              NF_ReadSectorToBuff(ulSectorNo+3,ucNFPageBuff+1536);    
+                              for(uiCount= 0 ; uiCount<512; uiCount++)
+                              {
+                                      ucNFPageBuff[uiCount] = Sector_Buf[uiCount];
+                              }
+                      }
+                      else if(ucSectorIndexNo == 1)
+                      {
+                              NF_ReadSectorToBuff(ulSectorNo,ucNFPageBuff);   
+                              NF_ReadSectorToBuff(ulSectorNo+2,ucNFPageBuff+1024);    
+                              NF_ReadSectorToBuff(ulSectorNo+3,ucNFPageBuff+1536);    
+                              for(uiCount= 0 ; uiCount<512; uiCount++)
+                              {
+                                      ucNFPageBuff[uiCount+512] = Sector_Buf[uiCount];
+                              }
+                      }
+                      else if(ucSectorIndexNo == 2)
+                      {
+                              NF_ReadSectorToBuff(ulSectorNo,ucNFPageBuff);   
+                              NF_ReadSectorToBuff(ulSectorNo+1,ucNFPageBuff+512);     
+                              NF_ReadSectorToBuff(ulSectorNo+3,ucNFPageBuff+1536);    
+                              for(uiCount= 0 ; uiCount<512; uiCount++)
+                              {
+                                      ucNFPageBuff[uiCount+1024] = Sector_Buf[uiCount];
+                              }
+C51 COMPILER V9.00   NANDFLASH                                                             05/31/2015 23:23:16 PAGE 13  
+
+                      }
+                      else
+                      {
+                              NF_ReadSectorToBuff(ulSectorNo,ucNFPageBuff);   
+                              NF_ReadSectorToBuff(ulSectorNo+1,ucNFPageBuff+512);     
+                              NF_ReadSectorToBuff(ulSectorNo+2,ucNFPageBuff+1024);    
+                              for(uiCount= 0 ; uiCount<512; uiCount++)
+                              {
+                                      ucNFPageBuff[uiCount+1536] = Sector_Buf[uiCount];
+                              }
+                      }
+                      return(NandFlash_WritePage(ulSectorNo));
+              }
+              #endif
+ 752          
+ 753          #if 0
+              
+              void TestNandFlash(void)
+              {
+                      uchar xdata ucIDDataBuff[5];
+                      uint uiCount;
+              
+                      NandFlash_Reset();
+                      TI0 = 1;
+                      while(1)
+                      {
+                              NandFlash_ReadID(ucIDDataBuff);
+                              printf("Read NandFlash Id Value is:%02X,%02X,%02X,%02X,%02X\r\n",(uint)ucIDDataBuff[0],(uint)ucIDDataBuf
+             -f[1],(uint)ucIDDataBuff[2],(uint)ucIDDataBuff[3],(uint)ucIDDataBuff[4]);
+                              printf("Check Bad Block Count is %d\r\n",NandFlash_CheckBadBlock());
+              
+                              if(NandFlash_EraseBlock(0))
+                              {
+                                      printf("erase Block 0 success!\r\n");
+                                      NandFlash_ReadSector(0);//读1个扇区的内容到缓冲区
+                                      printf("Read NandFlash Data Value is:%02X,%02X,%02X,%02X,%02X\r\n",(uint)Sector_Buf[0],(uint)Sector_Buf
+             -[1],(uint)Sector_Buf[2],(uint)Sector_Buf[3],(uint)Sector_Buf[4]);
+                                      NandFlash_ReadSector(1);//读1个扇区的内容到缓冲区
+                                      printf("Read NandFlash Data Value is:%02X,%02X,%02X,%02X,%02X\r\n",(uint)Sector_Buf[0],(uint)Sector_Buf
+             -[1],(uint)Sector_Buf[2],(uint)Sector_Buf[3],(uint)Sector_Buf[4]);
+                                      NandFlash_ReadSector(2);//读1个扇区的内容到缓冲区
+                                      printf("Read NandFlash Data Value is:%02X,%02X,%02X,%02X,%02X\r\n",(uint)Sector_Buf[0],(uint)Sector_Buf
+             -[1],(uint)Sector_Buf[2],(uint)Sector_Buf[3],(uint)Sector_Buf[4]);
+                                      NandFlash_ReadSector(3);//读1个扇区的内容到缓冲区
+                                      printf("Read NandFlash Data Value is:%02X,%02X,%02X,%02X,%02X\r\n",(uint)Sector_Buf[0],(uint)Sector_Buf
+             -[1],(uint)Sector_Buf[2],(uint)Sector_Buf[3],(uint)Sector_Buf[4]);
+              
+              
+                                      printf("\r\n Start Write Page\r\n");
+                                 for(uiCount=0; uiCount<512; uiCount++)
+                                 {
+                                       //Sector_Buf[uiCount] = uiCount & 0xff;
+                                        ucNFPageBuff[uiCount] = uiCount;
+                                 }
+              
+                                 for(uiCount=512; uiCount<1024; uiCount++)
+                                 {
+                                       //Sector_Buf[uiCount] = (uiCount & 0xff + 1);
+                                       ucNFPageBuff[uiCount] = 0xAA;
+              //                       ucNFPageBuff[uiCount] = 0x68;
+              
+                                 }
+C51 COMPILER V9.00   NANDFLASH                                                             05/31/2015 23:23:16 PAGE 14  
+
+              
+                                 for(uiCount=1024; uiCount<1536; uiCount++)
+                                 {
+                                       //Sector_Buf[uiCount] = (uiCount & 0xff + 2);
+                                       ucNFPageBuff[uiCount] = 0x5A;
+                                 }
+              
+                                 for(uiCount=1536; uiCount<2048; uiCount++)
+                                 {
+                                      // Sector_Buf[uiCount] = (uiCount & 0xff + 3);
+                                       ucNFPageBuff[uiCount] = 0xA5;
+                                 }
+                                 if(NandFlash_WritePage(0))
+                                 {
+                                              printf("Programer One Page Ok!\r\n");
+                                 }
+                                 else
+                                 {
+                                              printf("Programer One Page Err!\r\n");
+                                 }
+                                              
+                                      NandFlash_ReadSector(0);//读1个扇区的内容到缓冲区
+                                      printf("Read NandFlash Data Value is:%02X,%02X,%02X,%02X,%02X\r\n",(uint)Sector_Buf[0],(uint)Sector_Buf
+             -[1],(uint)Sector_Buf[2],(uint)Sector_Buf[3],(uint)Sector_Buf[4]);
+                                      NandFlash_ReadSector(1);//读1个扇区的内容到缓冲区
+                                      printf("Read NandFlash Data Value is:%02X,%02X,%02X,%02X,%02X\r\n",(uint)Sector_Buf[0],(uint)Sector_Buf
+             -[1],(uint)Sector_Buf[2],(uint)Sector_Buf[3],(uint)Sector_Buf[4]);
+                                      NandFlash_ReadSector(2);//读1个扇区的内容到缓冲区
+                                      printf("Read NandFlash Data Value is:%02X,%02X,%02X,%02X,%02X\r\n",(uint)Sector_Buf[0],(uint)Sector_Buf
+             -[1],(uint)Sector_Buf[2],(uint)Sector_Buf[3],(uint)Sector_Buf[4]);
+                                      NandFlash_ReadSector(3);//读1个扇区的内容到缓冲区
+                                      printf("Read NandFlash Data Value is:%02X,%02X,%02X,%02X,%02X\r\n",(uint)Sector_Buf[0],(uint)Sector_Buf
+             -[1],(uint)Sector_Buf[2],(uint)Sector_Buf[3],(uint)Sector_Buf[4]);
+              
+                                      while(1);
+                              }
+                              else
+                              {
+                                      printf("Erase Block 0 Err!\r\n");
+                              }
+              
+              
+                      }
+              }
+              
+              #endif
+ 837          
+ 838          /*
+ 839          void TestNandFlash(void)
+ 840          {
+ 841                  uchar xdata ucIDDataBuff[5];
+ 842                  uint uiCount;
+ 843          
+ 844                  NandFlash_Reset();
+ 845                  TI = 1;
+ 846                  while(1)
+ 847                  {
+ 848                          NandFlash_ReadID(ucIDDataBuff);
+ 849                          printf("Read NandFlash Id Value is:%02X,%02X,%02X,%02X,%02X\r\n",(uint)ucIDDataBuff[0],(uint)ucIDDataBuf
+             -f[1],(uint)ucIDDataBuff[2],(uint)ucIDDataBuff[3],(uint)ucIDDataBuff[4]);
+ 850                          printf("Check Bad Block Count is %d\r\n",NandFlash_CheckBadBlock());
+ 851                          if(NandFlash_EraseBlock(0))
+C51 COMPILER V9.00   NANDFLASH                                                             05/31/2015 23:23:16 PAGE 15  
+
+ 852                          {
+ 853                                  printf("erase Block 0 success!\r\n");
+ 854                          }
+ 855                          else
+ 856                          {
+ 857                                  printf("Erase Block 0 Err!\r\n");
+ 858                          }
+ 859                          {
+ 860                                  //测试写数据到Flash中
+ 861                                  printf("Page Write Start\r\n");
+ 862                             NandFlash_WritePageStart(0);
+ 863          
+ 864                             for(uiCount=0; uiCount<512; uiCount++)
+ 865                             {
+ 866                                   //Sector_Buf[uiCount] = uiCount & 0xff;
+ 867                                    Sector_Buf[uiCount] = uiCount;
+ 868                             }
+ 869                                  NandFlash_WriteOneSectorDataToPage();
+ 870                                  printf("Page Write Data Finish\r\n");
+ 871          
+ 872                             for(uiCount=0; uiCount<512; uiCount++)
+ 873                             {
+ 874                                   //Sector_Buf[uiCount] = (uiCount & 0xff + 1);
+ 875                                   Sector_Buf[uiCount] = 0xAA;
+ 876                             }
+ 877                                  NandFlash_WriteOneSectorDataToPage();
+ 878                                  printf("Page Write Data Finish\r\n");
+ 879          
+ 880                             for(uiCount=0; uiCount<512; uiCount++)
+ 881                             {
+ 882                                   //Sector_Buf[uiCount] = (uiCount & 0xff + 2);
+ 883                                   Sector_Buf[uiCount] = 0x5A;
+ 884                             }
+ 885                                  NandFlash_WriteOneSectorDataToPage();
+ 886                                  printf("Page Write Data Finish\r\n");
+ 887          
+ 888                             for(uiCount=0; uiCount<512; uiCount++)
+ 889                             {
+ 890                                  // Sector_Buf[uiCount] = (uiCount & 0xff + 3);
+ 891                                   Sector_Buf[uiCount] = 0xA5;
+ 892                             }
+ 893                                  NandFlash_WriteOneSectorDataToPage();
+ 894                                  printf("Page Write End\r\n");
+ 895                             if(NandFlash_WritePageEnd())
+ 896                             {
+ 897                                          printf("Programer One Page Ok!\r\n");
+ 898                             }
+ 899                             else
+ 900                             {
+ 901                                          printf("Programer One Page Err!\r\n");
+ 902                             }
+ 903                                          
+ 904                                  NandFlash_ReadSector(0);//读1个扇区的内容到缓冲区
+ 905                                  printf("Read NandFlash Data Value is:%02X,%02X,%02X,%02X,%02X\r\n",(uint)Sector_Buf[0],(uint)Sector_Buf
+             -[1],(uint)Sector_Buf[511],(uint)Sector_Buf[512],(uint)Sector_Buf[513]);
+ 906                                  NandFlash_ReadSector(1);//读1个扇区的内容到缓冲区
+ 907                                  printf("Read NandFlash Data Value is:%02X,%02X,%02X,%02X,%02X\r\n",(uint)Sector_Buf[0],(uint)Sector_Buf
+             -[1],(uint)Sector_Buf[2],(uint)Sector_Buf[3],(uint)Sector_Buf[4]);
+ 908                                  NandFlash_ReadSector(2);//读1个扇区的内容到缓冲区
+ 909                                  printf("Read NandFlash Data Value is:%02X,%02X,%02X,%02X,%02X\r\n",(uint)Sector_Buf[0],(uint)Sector_Buf
+             -[1],(uint)Sector_Buf[2],(uint)Sector_Buf[3],(uint)Sector_Buf[4]);
+ 910                                  NandFlash_ReadSector(3);//读1个扇区的内容到缓冲区
+C51 COMPILER V9.00   NANDFLASH                                                             05/31/2015 23:23:16 PAGE 16  
+
+ 911                                  printf("Read NandFlash Data Value is:%02X,%02X,%02X,%02X,%02X\r\n",(uint)Sector_Buf[0],(uint)Sector_Buf
+             -[1],(uint)Sector_Buf[2],(uint)Sector_Buf[3],(uint)Sector_Buf[4]);
+ 912          
+ 913                          }
+ 914                          Delay(250);
+ 915                          while(1);
+ 916                  }       
+ 917          }
+ 918          */
+ 919          
+ 920          
+ 921          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    601    ----
+   CONSTANT SIZE    =     16    ----
+   XDATA SIZE       =   2564      15
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

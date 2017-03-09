@@ -1,0 +1,8 @@
+"Main.obj",
+"NandFlash.obj",
+"Usb_Function.obj",
+"Usb_Isr.obj",
+"Usb_Setup.obj",
+"Bulk_Only.obj" 
+TO "F340MP3TestIO" 
+RAMSIZE(256) 

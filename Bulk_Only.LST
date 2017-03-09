@@ -1,0 +1,888 @@
+C51 COMPILER V9.00   BULK_ONLY                                                             05/31/2015 23:23:18 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE BULK_ONLY
+OBJECT MODULE PLACED IN Bulk_Only.OBJ
+COMPILER INVOKED BY: D:\learning\C51\BIN\C51.EXE Bulk_Only.c LARGE BROWSE DEBUG OBJECTEXTEND
+
+line level    source
+
+   1          #include "c8051F340.h"
+   2          #include "stdio.h"
+   3          #include "intrins.h"
+   4          /////////////////////////////
+   5          
+   6          #include "Usb_FunDec.h"
+   7          #include "Usb_Parameter.h"
+   8          #include "Usb_Register.h"
+   9          #include "Usb_Request.h"
+  10          #include "Usb_SCSI_Descreptor.h"
+  11          
+  12          #define uchar unsigned char  
+  13          #define uint unsigned int 
+  14          #define ulong unsigned long
+  15          #define bool bit
+  16          
+  17          ///////////////////////////////////////////////////////////////////////////////////////////
+  18          unsigned char b[513];
+  19          unsigned char key[17]={'s','h','e','j','k','s','a','h','g','a','s','d','x','c','d','f'};
+  20          unsigned char skey[15*16];//加密后的密文或者解密后的明文放在b数组里面
+  21          static code unsigned char sbox[256]={
+  22          0x63,0x7c,0x77,0x7b,0xf2,0x6b,0x6f,0xc5,
+  23          0x30,0x01,0x67,0x2b,0xfe,0xd7,0xab,0x76,
+  24          0xca,0x82,0xc9,0x7d,0xfa,0x59,0x47,0xf0,
+  25          0xad,0xd4,0xa2,0xaf,0x9c,0xa4,0x72,0xc0,
+  26          0xb7,0xfd,0x93,0x26,0x36,0x3f,0xf7,0xcc,
+  27          0x34,0xa5,0xe5,0xf1,0x71,0xd8,0x31,0x15,
+  28          0x04,0xc7,0x23,0xc3,0x18,0x96,0x05,0x9a,
+  29          0x07,0x12,0x80,0xe2,0xeb,0x27,0xb2,0x75,
+  30          0x09,0x83,0x2c,0x1a,0x1b,0x6e,0x5a,0xa0,
+  31          0x52,0x3b,0xd6,0xb3,0x29,0xe3,0x2f,0x84,
+  32          0x53,0xd1,0x00,0xed,0x20,0xfc,0xb1,0x5b,
+  33          0x6a,0xcb,0xbe,0x39,0x4a,0x4c,0x58,0xcf,
+  34          0xd0,0xef,0xaa,0xfb,0x43,0x4d,0x33,0x85,
+  35          0x45,0xf9,0x02,0x7f,0x50,0x3c,0x9f,0xa8,
+  36          0x51,0xa3,0x40,0x8f,0x92,0x9d,0x38,0xf5,
+  37          0xbc,0xb6,0xda,0x21,0x10,0xff,0xf3,0xd2,
+  38          0xcd,0x0c,0x13,0xec,0x5f,0x97,0x44,0x17,
+  39          0xc4,0xa7,0x7e,0x3d,0x64,0x5d,0x19,0x73,
+  40          0x60,0x81,0x4f,0xdc,0x22,0x2a,0x90,0x88,
+  41          0x46,0xee,0xb8,0x14,0xde,0x5e,0x0b,0xdb,
+  42          0xe0,0x32,0x3a,0x0a,0x49,0x06,0x24,0x5c,
+  43          0xc2,0xd3,0xac,0x62,0x91,0x95,0xe4,0x79,
+  44          0xe7,0xc8,0x37,0x6d,0x8d,0xd5,0x4e,0xa9,
+  45          0x6c,0x56,0xf4,0xea,0x65,0x7a,0xae,0x08,
+  46          0xba,0x78,0x25,0x2e,0x1c,0xa6,0xb4,0xc6,
+  47          0xe8,0xdd,0x74,0x1f,0x4b,0xbd,0x8b,0x8a,
+  48          0x70,0x3e,0xb5,0x66,0x48,0x03,0xf6,0x0e,
+  49          0x61,0x35,0x57,0xb9,0x86,0xc1,0x1d,0x9e,
+  50          0xe1,0xf8,0x98,0x11,0x69,0xd9,0x8e,0x94,
+  51          0x9b,0x1e,0x87,0xe9,0xce,0x55,0x28,0xdf,
+  52          0x8c,0xa1,0x89,0x0d,0xbf,0xe6,0x42,0x68,
+  53          0x41,0x99,0x2d,0x0f,0xb0,0x54,0xbb,0x16,
+  54          };
+  55          //逆向 S 盒
+C51 COMPILER V9.00   BULK_ONLY                                                             05/31/2015 23:23:18 PAGE 2   
+
+  56          static code unsigned char contrary_sbox[256]={
+  57          0x52,0x09,0x6a,0xd5,0x30,0x36,0xa5,0x38,
+  58          0xbf,0x40,0xa3,0x9e,0x81,0xf3,0xd7,0xfb,
+  59          0x7c,0xe3,0x39,0x82,0x9b,0x2f,0xff,0x87,
+  60          0x34,0x8e,0x43,0x44,0xc4,0xde,0xe9,0xcb,
+  61          0x54,0x7b,0x94,0x32,0xa6,0xc2,0x23,0x3d,
+  62          0xee,0x4c,0x95,0x0b,0x42,0xfa,0xc3,0x4e,
+  63          0x08,0x2e,0xa1,0x66,0x28,0xd9,0x24,0xb2,
+  64          0x76,0x5b,0xa2,0x49,0x6d,0x8b,0xd1,0x25,
+  65          0x72,0xf8,0xf6,0x64,0x86,0x68,0x98,0x16,
+  66          0xd4,0xa4,0x5c,0xcc,0x5d,0x65,0xb6,0x92,
+  67          0x6c,0x70,0x48,0x50,0xfd,0xed,0xb9,0xda,
+  68          0x5e,0x15,0x46,0x57,0xa7,0x8d,0x9d,0x84,
+  69          0x90,0xd8,0xab,0x00,0x8c,0xbc,0xd3,0x0a,
+  70          0xf7,0xe4,0x58,0x05,0xb8,0xb3,0x45,0x06,
+  71          0xd0,0x2c,0x1e,0x8f,0xca,0x3f,0x0f,0x02,
+  72          0xc1,0xaf,0xbd,0x03,0x01,0x13,0x8a,0x6b,
+  73          0x3a,0x91,0x11,0x41,0x4f,0x67,0xdc,0xea,
+  74          0x97,0xf2,0xcf,0xce,0xf0,0xb4,0xe6,0x73,
+  75          0x96,0xac,0x74,0x22,0xe7,0xad,0x35,0x85,
+  76          0xe2,0xf9,0x37,0xe8,0x1c,0x75,0xdf,0x6e,
+  77          0x47,0xf1,0x1a,0x71,0x1d,0x29,0xc5,0x89,
+  78          0x6f,0xb7,0x62,0x0e,0xaa,0x18,0xbe,0x1b,
+  79          0xfc,0x56,0x3e,0x4b,0xc6,0xd2,0x79,0x20,
+  80          0x9a,0xdb,0xc0,0xfe,0x78,0xcd,0x5a,0xf4,
+  81          0x1f,0xdd,0xa8,0x33,0x88,0x07,0xc7,0x31,
+  82          0xb1,0x12,0x10,0x59,0x27,0x80,0xec,0x5f,
+  83          0x60,0x51,0x7f,0xa9,0x19,0xb5,0x4a,0x0d,
+  84          0x2d,0xe5,0x7a,0x9f,0x93,0xc9,0x9c,0xef,
+  85          0xa0,0xe0,0x3b,0x4d,0xae,0x2a,0xf5,0xb0,
+  86          0xc8,0xeb,0xbb,0x3c,0x83,0x53,0x99,0x61,
+  87          0x17,0x2b,0x04,0x7e,0xba,0x77,0xd6,0x26,
+  88          0xe1,0x69,0x14,0x63,0x55,0x21,0x0c,0x7d,
+  89          };
+  90          /*The key schedule rcon table*/ static code unsigned char Rcon[10]={
+  91          0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80,0x1b,0x36};
+  92          /*The xtime() function */ static unsigned char xtime(unsigned char x)
+  93          {
+  94   1          int temp;
+  95   1          temp=x<<1;
+  96   1          if ( x& 0x80)
+  97   1          {
+  98   2              temp^=0x1b;
+  99   2          }
+ 100   1          return temp;
+ 101   1      }
+ 102          /*MixColumns: Process the entire block*/
+ 103          static void MixColumns(unsigned char *col)//列混合
+ 104          {
+ 105   1          unsigned char xt[4]; int x,i;
+ 106   1          for(x=0;x<4;x++)
+ 107   1          {
+ 108   2              for(i=0;i<4;i++)
+ 109   2              xt[i]=xtime(col[x*4+i])^(col[x*4+(i+1)%4]^xtime(col[x*4+(i+1)%4]))^col[x*4+(i+2)%4]^col[x*4+(i+3)%
+             -4];
+ 110   2              for(i=0;i<4;i++)
+ 111   2              col[x*4+i]=xt[i];
+ 112   2          }
+ 113   1      }
+ 114          //逆向列混淆
+ 115          static void Contrary_MixColumns(unsigned char *col)
+ 116          {   unsigned char xt[4];
+C51 COMPILER V9.00   BULK_ONLY                                                             05/31/2015 23:23:18 PAGE 3   
+
+ 117   1          int x,i;
+ 118   1          for(x=0;x<4;x++)
+ 119   1          {
+ 120   2              for(i=0;i<4;i++)
+ 121   2              xt[i]=(xtime(xtime(xtime(col[x*4+i])))^xtime(xtime(col[x*4+i]))^xtime(col[x*4+i]))^(xtime(xtime(xt
+             -ime(col[x*4+(i+1)%4])))^xtime(col[x*4+(i+1)%4])^col[x*4+(i+1)%4])^(xtime(xtime(xtime(col[x*4+(i+2)%4])))^xtime(xtime(col
+             -[x*4+(i+2)%4]))^col[x*4+(i+2)%4])^(xtime(xtime(xtime(col[x*4+(i+3)%4])))^col[x*4+(i+3)%4]);
+ 122   2              for(i=0;i<4;i++)
+ 123   2              col[x*4+i]=xt[i];
+ 124   2          }
+ 125   1      }
+ 126          /*ShiftRows:Shifts the entire block*/ static void ShiftRows(unsigned char *col)//正向行移位
+ 127          { unsigned char t;
+ 128   1      /*2nd row*/
+ 129   1      t=col[1];col[1]=col[5];col[5]=col[9]; col[9]=col[13];col[13]=t;
+ 130   1      /*3rd row*/ t=col[2];col[2]=col[10];col[10]=t; t=col[6];col[6]=col[14];col[14]=t;
+ 131   1      /*4th row*/ t=col[15];col[15]=col[11];col[11]=col[7]; col[7]=col[3];col[3]=t;
+ 132   1      }
+ 133          //逆向行移位
+ 134          static void Contrary_ShiftRows(unsigned char *col)
+ 135          { unsigned char t;
+ 136   1      /*2nd row*/ t=col[13];col[13]=col[9];col[9]=col[5]; col[5]=col[1];col[1]=t;
+ 137   1      /*3rd row*/ t=col[2];col[2]=col[10];col[10]=t; t=col[6];col[6]=col[14];col[14]=t;
+ 138   1      /*4th row*/ t=col[3];col[3]=col[7];col[7]=col[11]; col[11]=col[15];col[15]=t;
+ 139   1      }
+ 140          /*SubBytes*/ static void SubBytes(unsigned char *col)//字节代换
+ 141          {
+ 142   1          int x;
+ 143   1          for(x=0;x<16;x++)
+ 144   1      {
+ 145   2           col[x]=sbox[col[x]];
+ 146   2      }
+ 147   1      }
+ 148          //逆向字节代换
+ 149          static void Contrary_SubBytes(unsigned char *col)
+ 150          {
+ 151   1          int x;
+ 152   1      for(x=0;x<16;x++)
+ 153   1      {
+ 154   2          col[x]=contrary_sbox[col[x]];
+ 155   2      }
+ 156   1      }
+ 157          /*AddRoundKey*/ static void AddRoundKey(unsigned char *col,unsigned char *key,int round)//密匙加
+ 158          {
+ 159   1          int x;
+ 160   1          for(x=0;x<16;x++)
+ 161   1      {
+ 162   2          col[x]^=key[(round<<4)+x];
+ 163   2      }
+ 164   1      }
+ 165          /*Encrypt a single block with Nr Rounds(10,12,14)*/ void AesEncrypt(unsigned char *blk,unsigned char *key,
+             -int Nr)//加密一个区块
+ 166          {
+ 167   1          int x;
+ 168   1      AddRoundKey(blk,key,0);
+ 169   1      for(x=1;x<=(Nr-1);x++)
+ 170   1      {
+ 171   2      SubBytes(blk);
+ 172   2      ShiftRows(blk);
+ 173   2      MixColumns(blk);
+ 174   2      AddRoundKey(blk,key,x);
+ 175   2      }
+C51 COMPILER V9.00   BULK_ONLY                                                             05/31/2015 23:23:18 PAGE 4   
+
+ 176   1      SubBytes(blk);
+ 177   1      ShiftRows(blk);
+ 178   1      AddRoundKey(blk,key,Nr);
+ 179   1      }
+ 180          //AES 解密
+ 181          void Contrary_AesEncrypt(unsigned char *blk,unsigned char *key,int Nr)
+ 182          {
+ 183   1          int x;
+ 184   1      /*      unsigned char *contrary_key=key; for(x=0;x<11;x++,key+=16)
+ 185   1      Contrary_MixColumns(key);*/
+ 186   1      AddRoundKey(blk,key,Nr);
+ 187   1      Contrary_ShiftRows(blk);
+ 188   1      Contrary_SubBytes(blk);
+ 189   1      for(x=(Nr-1);x>=1;x--)
+ 190   1      {
+ 191   2      AddRoundKey(blk,key,x);
+ 192   2      Contrary_MixColumns(blk);
+ 193   2      Contrary_ShiftRows(blk);
+ 194   2      Contrary_SubBytes(blk);
+ 195   2      }
+ 196   1      AddRoundKey(blk,key,0);
+ 197   1      }
+ 198          /*Schedule a secret key for use.
+ 199          *outkey[] must be 16*15 bytes in size
+ 200          *Nk==number of 32 bit words in the key,e.g.,4,6,8
+ 201          *Nr==number of rounds,e.g.,10,12,14
+ 202          */
+ 203          void ScheduleKey(unsigned char *inkey,unsigned char *outkey,int Nk,int Nr)//安排一个保密密钥使用
+ 204          {
+ 205   1          unsigned char temp[4],t;
+ 206   1          int x,i;
+ 207   1      /*copy the key*/ for(i=0;i<(4*Nk);i++)
+ 208   1      {
+ 209   2          outkey[i]=inkey[i];
+ 210   2      }
+ 211   1      i=Nk;
+ 212   1      while(i<(4*(Nr+1)))
+ 213   1      {
+ 214   2      /*temp=w[i]*/ for(x=0;x<4;x++)
+ 215   2      temp[x]=outkey[((i-1)<<2)+x];
+ 216   2      if(i%Nk==0)
+ 217   2      {
+ 218   3      /*RotWord()*/ t=temp[0];temp[0]=temp[1]; temp[1]=temp[2];temp[2]=temp[3];temp[3]=t;
+ 219   3      /*SubWord()*/ for(x=0;x<4;x++)
+ 220   3      {
+ 221   4          temp[x]=sbox[temp[x]];
+ 222   4      }
+ 223   3      temp[0]^=Rcon[(i/Nk)-1];
+ 224   3      }
+ 225   2      else if(Nk>6 && ( i%Nk )==4) { /*SubWord*/
+ 226   3          for(x=0;x<4;x++)
+ 227   3      {
+ 228   4          temp[x]=sbox[temp[x]];
+ 229   4      }
+ 230   3      }
+ 231   2      /*w[i]=w[i-Nk] xor temp*/ for(x=0;x<4;x++)
+ 232   2      {
+ 233   3          outkey[(i<<2)+x]=outkey[((i-Nk)<<2)+x]^temp[x];
+ 234   3      }
+ 235   2      ++ i;
+ 236   2      } }
+ 237          void AES_jiami(unsigned char *a,unsigned char *b)//a[513]是要加密的明文
+C51 COMPILER V9.00   BULK_ONLY                                                             05/31/2015 23:23:18 PAGE 5   
+
+ 238          {
+ 239   1          int i;
+ 240   1          int j;
+ 241   1          unsigned char pt[17];
+ 242   1          ScheduleKey(key,skey,4,10);
+ 243   1          for(i=0;i<32;i++)
+ 244   1          {
+ 245   2              for(j=0;j<16;j++)
+ 246   2              {
+ 247   3                  pt[j]=a[i*16+j];
+ 248   3              }
+ 249   2              AesEncrypt(pt,skey,10);//AES 加密
+ 250   2              for(j=0;j<16;j++)
+ 251   2              {
+ 252   3                  b[i*16+j]=pt[j];
+ 253   3              }
+ 254   2          }
+ 255   1              b[512]='\0';
+ 256   1      }
+ 257          void AES_jiemi(unsigned char *a,unsigned char *b)//a[513]为要解密的密文
+ 258          {
+ 259   1          int i;
+ 260   1          int j;
+ 261   1          unsigned char pt[17];
+ 262   1          ScheduleKey(key,skey,4,10);
+ 263   1          for(i=0;i<32;i++)
+ 264   1          {
+ 265   2              for(j=0;j<16;j++)
+ 266   2              {
+ 267   3                  pt[j]=a[i*16+j];
+ 268   3              }
+ 269   2              Contrary_AesEncrypt(pt,skey,10);//AES 解密
+ 270   2              for(j=0;j<16;j++)
+ 271   2              {
+ 272   3                  b[i*16+j]=pt[j];
+ 273   3              }
+ 274   2          }
+ 275   1      }
+ 276          
+ 277          
+ 278          //////////////////////////////////////////////////////////////////////////////////////
+ 279          sbit    LED                     = P0^0;         //LED控制脚
+ 280          // Bulk传输处理函数
+ 281          void Interpret_CBW(void);               // 解释CBW命令
+ 282          void TransDataGoOn(void);               // 继续传输
+ 283          void TransCSW(void);                    // 发送CSW
+ 284          void Bulk_Receive_Data(void);   // 接收数据
+ 285          void Copy(unsigned char *PEnd,unsigned char *PSource,unsigned int num); // 在Bulk_Out过程中将Bulk_Buffer中
+             -的数据拷贝到Bulk_PACKET中
+ 286          // 外部函数调用
+ 287          extern void                     Flash_Read_Page(unsigned int BLockNum,unsigned char BlockPageNum,unsigned char *P,unsigned 
+             -int Data_Length);
+ 288          extern unsigned char    Flash_Write_Page(unsigned int BLockNum,unsigned char BlockPageNum,unsigned char *P,u
+             -nsigned int Data_Length);
+ 289          extern unsigned char    Flash_Erase_Block(unsigned int BlockNum);       
+ 290          // 外部变量
+ 291          extern unsigned char Ep_Status[3];
+ 292          // BUlk传输变量
+ 293          unsigned char Bulk_Status = BULK_IDLE;                          // Bulk传输状态
+ 294          unsigned char Bulk_CSW[13]={0x55,0x53,0x42,0x53,};
+ 295          
+ 296          typedef struct CBWCB
+C51 COMPILER V9.00   BULK_ONLY                                                             05/31/2015 23:23:18 PAGE 6   
+
+ 297          {
+ 298                  unsigned char type;// 0
+ 299                  unsigned char no1; // 1
+ 300                  //UL32 addr;            // 2,3,4,5
+ 301                  UL16 addr_no;
+ 302                  UL16 addr;
+ 303                  unsigned char no2;//6
+ 304                  unsigned int length; // 7,8
+ 305                  UL32 no3;//9,10,11,12
+ 306                  unsigned int no4;//13,14,
+ 307                  unsigned char no5;//15
+ 308                  
+ 309          
+ 310          }Bulk_CBWCB;
+ 311          
+ 312          typedef struct CBW
+ 313          {
+ 314                  UL32 dCBWstagnature;
+ 315                  UL32 dCBWTag;
+ 316                  UL32 dCBWDataTransLength;
+ 317                  unsigned char bmCBWFlags;
+ 318                  unsigned char dCBWLun;
+ 319                  unsigned char dCBWCBLength;
+ 320                  Bulk_CBWCB CBWCB;
+ 321          }s_Bulk_CBW;
+ 322          typedef union
+ 323          {
+ 324          unsigned char Bulk_PACKET[512];
+ 325          //unsigned char Buffer[64];     // FIFO缓冲区
+ 326           s_Bulk_CBW Bulk_CBW;
+ 327          }s_Bulk_Buffer;
+ 328          
+ 329          xdata s_Bulk_Buffer Bulk_Buffer;
+ 330          //xdata unsigned char Bulk_PACKET[512]; // 读写FLASH时的数据缓冲区
+ 331          //xdata unsigned char Bulk_Buffer[64];  // FIFO缓冲区
+ 332          //unsigned int LBA=0;   // LBA
+ 333          S_LBA LBA;
+ 334          //S_LBA LBA_old;
+ 335          xdata unsigned char Bulk_READ[512];
+ 336          unsigned char *usb_buf = Bulk_Buffer.Bulk_PACKET;
+ 337          
+ 338          unsigned int Transfer_Length=0;                 // 要传输的长度，单位为扇区
+ 339          unsigned int nCurrentBlock=0;                   // 当前的Block地址                      K9F1G08为1024个块
+ 340          unsigned char nCurrentPage=0;                   // 当前的Page地址                       K9F1G08为64个页
+ 341          unsigned char nCurrentSectorOffsetInPage;               //当前页内扇区偏移号            K9F1G08为4个
+ 342          
+ 343          unsigned char *pCurrentBuf;                             // Bulk传输中的指针
+ 344          unsigned int nBufCount=0;                               // FIFO读写过程中传输的数据量
+ 345          unsigned char nBegainPage=0;                    // Bulk_Out传输中的开始Page地址   
+ 346          unsigned char nBegainSectorOffsetInPage;  //开始的页内偏移
+ 347          
+ 348          extern uchar xdata ucNFPageBuff[2048];          //NandFlash读写操作缓冲区
+ 349          
+ 350          
+ 351          //读取扇区的内容到缓冲区
+ 352          //每个设备=1024个块，每个块为64页，每面为2K
+ 353          void   NF_ReadSectorToBuff(ulong ulSectorNo,uchar *ucDataBuffer);
+ 354          bool NandFlash_EraseBlock(uint uiBlockNo);
+ 355          bool NandFlash_WritePage(ulong ulSectorNo);
+ 356          void   NF_ReadSectorToBuff(ulong ulSectorNo,uchar *ucDataBuffer);
+ 357          void   NF_ReadPage(ulong ulSectorNo);
+ 358          
+C51 COMPILER V9.00   BULK_ONLY                                                             05/31/2015 23:23:18 PAGE 7   
+
+ 359          /////////////////////////////////////////////////////////////////////////////////////////////                   
+ 360          void Handle_In1()
+ 361          {
+ 362   1          unsigned char ControlReg;
+ 363   1              UWrite_Byte(INDEX, 1);           
+ 364   1              URead_Byte(EINCSRL, ControlReg); 
+ 365   1              if (Ep_Status[1] == EP_HALT)         
+ 366   1              {
+ 367   2              UWrite_Byte(EINCSRL, rbInSDSTL);
+ 368   2              }
+ 369   1              else                                 
+ 370   1              {
+ 371   2                      if (ControlReg & rbInSTSTL)       
+ 372   2              {
+ 373   3                      UWrite_Byte(EINCSRL, rbInCLRDT);//清除SDSTL和STSTL，并将CLRDT写1使toggle复位为0
+ 374   3              }
+ 375   2                      if (ControlReg & rbInUNDRUN)            
+ 376   2              {
+ 377   3                      UWrite_Byte(EINCSRL, 0x00);             // 清除UNDRUN，注意toggle位不复位
+ 378   3              }
+ 379   2                      if(!(ControlReg & rbInINPRDY))
+ 380   2                      {
+ 381   3                              switch(Bulk_Status)
+ 382   3                              {
+ 383   4                                      case BULK_DATA_TRANS:   TransDataGoOn();        break;
+ 384   4                                      case BULK_DATA_END:             TransCSW();                     break;
+ 385   4                                      default:                                                                        break;
+ 386   4                              } 
+ 387   3                      }                                      
+ 388   2              }                                   
+ 389   1      }
+ 390          /////////////////////////////////////////////////////////////////////////////////////////////                   
+ 391          // Handle_Out2
+ 392          void Handle_Out2()
+ 393          {
+ 394   1              unsigned int   Count=0;
+ 395   1              unsigned char  ControlReg;
+ 396   1              UWrite_Byte(INDEX, 2);                          // Set index to endpoint 2 registers
+ 397   1              URead_Byte(EOUTCSRL, ControlReg);
+ 398   1              if (Ep_Status[2] == EP_HALT)            // If endpoint is halted, send a stall
+ 399   1              {
+ 400   2              UWrite_Byte(EOUTCSRL, rbOutSDSTL);
+ 401   2      
+ 402   2              }
+ 403   1              else
+ 404   1              {
+ 405   2                  if (ControlReg & rbOutSTSTL)        
+ 406   2                  {
+ 407   3                       UWrite_Byte(EOUTCSRL, rbOutCLRDT);     //清除SDSTL和STSTL，并将CLRDT写1使toggle复位为0
+ 408   3                  }
+ 409   2                              ////////////////////////////////////////////////////////////////
+ 410   2                      if(ControlReg & rbOutOPRDY)
+ 411   2                      {
+ 412   3                              UWrite_Byte(INDEX, 2); 
+ 413   3                              URead_Byte(EOUTCNTL, Count);
+ 414   3                              Fifo_Read(FIFO_EP2, Count, usb_buf);
+ 415   3                              UWrite_Byte(INDEX, 2);           
+ 416   3                              UWrite_Byte(EOUTCSRL, 0);       // Clear Out Packet ready bit
+ 417   3                              if((Bulk_Status !=BULK_DATA_RECIEVE) && (Bulk_Buffer.Bulk_PACKET[0]==0x55))
+ 418   3                              {
+ 419   4                                      Interpret_CBW();
+ 420   4                              }       
+C51 COMPILER V9.00   BULK_ONLY                                                             05/31/2015 23:23:18 PAGE 8   
+
+ 421   3                              else
+ 422   3                              {                       
+ 423   4                                      Bulk_Receive_Data();
+ 424   4                              }
+ 425   3                      }
+ 426   2              }
+ 427   1      }
+ 428          ///////////////////////////////////////////////////////////////////////////////////////////////////
+ 429          void Interpret_CBW()
+ 430          {
+ 431   1              unsigned char i=0;
+ 432   1              Bulk_CSW[4] = Bulk_Buffer.Bulk_PACKET[4];
+ 433   1              Bulk_CSW[5] = Bulk_Buffer.Bulk_PACKET[5];
+ 434   1              Bulk_CSW[6] = Bulk_Buffer.Bulk_PACKET[6];
+ 435   1              Bulk_CSW[7] = Bulk_Buffer.Bulk_PACKET[7];
+ 436   1      
+ 437   1              switch(Bulk_Buffer.Bulk_CBW.CBWCB.type)
+ 438   1              {
+ 439   2                      case INQUIRY:                                   SCSI_Inquiry();                                 break;
+ 440   2                      case MODE_SENSE:                                SCSI_Mode_Sense();                              break;
+ 441   2                      case READ10:                                    SCSI_Read10();                                  break;
+ 442   2                      case READ_CAPACITY:                     SCSI_Read_Capacity();                   break;
+ 443   2                      case TEST_UNIT_READY:                   SCSI_Test_Unit_Ready();                 break;
+ 444   2                      case VERIFY:                                    SCSI_Verify();                                  break;
+ 445   2                      case WRITE10:                                   SCSI_Write10();                                 break;
+ 446   2                      case MEDIUM_REMOVAL:                    SCSI_Medium_Removal();                  break;
+ 447   2      
+ 448   2                      case Vender_Order:                              SCSI_Vender_Order();                    break;
+ 449   2                      default:                                                SCSI_Reserved();                                break;
+ 450   2              }       
+ 451   1      }
+ 452          ///////////////////////////////////////////////////////////////////////////////////////////////////                     
+ 453          void SCSI_Inquiry(void)
+ 454          {
+ 455   1              if(Bulk_Buffer.Bulk_CBW.CBWCB.addr.r[0]!=0)
+ 456   1              {
+ 457   2                      Bulk_Status=BULK_DATA_END;
+ 458   2                      Fifo_Write(FIFO_EP1,sizeof(Device_InquiryData),Device_InquiryData);
+ 459   2                      UWrite_Byte(INDEX, 1);
+ 460   2                      UWrite_Byte(EINCSRL, rbInINPRDY);
+ 461   2              }
+ 462   1              else
+ 463   1              {}
+ 464   1      }
+ 465          void SCSI_Mode_Sense(void)
+ 466          {
+ 467   1              Bulk_Status=BULK_DATA_END;
+ 468   1              Fifo_Write(FIFO_EP1,sizeof(Device_ModeSense),Device_ModeSense);
+ 469   1              UWrite_Byte(INDEX, 1);
+ 470   1              UWrite_Byte(EINCSRL, rbInINPRDY);
+ 471   1      }
+ 472          void SCSI_Read_Capacity(void)
+ 473          {
+ 474   1              Bulk_Status=BULK_DATA_END;
+ 475   1              Fifo_Write(FIFO_EP1,sizeof(Device_Capacity),Device_Capacity);
+ 476   1              UWrite_Byte(INDEX, 1);
+ 477   1              UWrite_Byte(EINCSRL, rbInINPRDY);
+ 478   1      }
+ 479          void SCSI_Vender_Order()
+ 480          {
+ 481   1              Bulk_Status=BULK_DATA_END;
+ 482   1              Fifo_Write(FIFO_EP1,sizeof(Vender_Order),Vender_Order);
+C51 COMPILER V9.00   BULK_ONLY                                                             05/31/2015 23:23:18 PAGE 9   
+
+ 483   1              UWrite_Byte(INDEX, 1);
+ 484   1              UWrite_Byte(EINCSRL, rbInINPRDY);
+ 485   1      }
+ 486          void SCSI_Test_Unit_Ready(void)
+ 487          {
+ 488   1              TransCSW();
+ 489   1      }
+ 490          void SCSI_Medium_Removal(void)
+ 491          {
+ 492   1              TransCSW();
+ 493   1      }
+ 494          void SCSI_Verify(void)
+ 495          {
+ 496   1              TransCSW();
+ 497   1      }
+ 498          void SCSI_Reserved(void)
+ 499          {
+ 500   1      }
+ 501          void TransCSW()
+ 502          {
+ 503   1              Fifo_Write(FIFO_EP1, 13, Bulk_CSW);
+ 504   1              UWrite_Byte(INDEX, 1);
+ 505   1              UWrite_Byte(EINCSRL, rbInINPRDY);   
+ 506   1              Bulk_Status=BULK_IDLE;                                 
+ 507   1      }
+ 508          ///////////////////////////////////////////////////////////////////////////////////////////////////
+ 509          void SCSI_Read10()
+ 510          {
+ 511   1              unsigned int i=0;
+ 512   1              LED=~LED;
+ 513   1              
+ 514   1              LBA.val = Bulk_Buffer.Bulk_CBW.CBWCB.addr.l;
+ 515   1              Transfer_Length = Bulk_Buffer.Bulk_CBW.CBWCB.length;
+ 516   1              //Transfer_Length = Bulk_CBW.CBWCB[7]*256 + Bulk_CBW.CBWCB[8];  //传输的长度，CBWCB的第7和8位代表传输长度
+ 517   1              nCurrentBlock = LBA.bits.block;         //计算FLASH的物理地址   
+ 518   1              nCurrentPage  = LBA.bits.page;
+ 519   1      //      K9FReadPageData();
+ 520   1          
+ 521   1              NF_ReadSectorToBuff(LBA.val,Bulk_READ);
+ 522   1              AES_jiemi(Bulk_READ,Bulk_READ);
+ 523   1              //Flash_Read_Page(nCurrentBlock,nCurrentPage,Bulk_PACKET,512);  //向页缓冲区读1页
+ 524   1      
+ 525   1              Transfer_Length--;              //待传输的扇区数减1
+ 526   1              //nCurrentPage++;                       //当前页序号加1
+ 527   1              LBA.val++;
+ 528   1              Bulk_Status = BULK_DATA_TRANS;          //Bulk在传输状态
+ 529   1              pCurrentBuf = Bulk_READ;                        //指针指向页缓冲区
+ 530   1              nBufCount=0;    
+ 531   1      
+ 532   1              Fifo_Write(FIFO_EP1,EP1_PACKET_SIZE,pCurrentBuf+nBufCount);             //在双缓冲方式，一次可以向FIFO写两个数据包
+ 533   1              UWrite_Byte(INDEX, 1);
+ 534   1              UWrite_Byte(EINCSRL, rbInINPRDY);
+ 535   1      }
+ 536          void TransDataGoOn()
+ 537          {
+ 538   1              unsigned int i=0;
+ 539   1              
+ 540   1              if(nBufCount<448)
+ 541   1              {
+ 542   2                      nBufCount+=EP1_PACKET_SIZE;             
+ 543   2                      Fifo_Write(FIFO_EP1,EP1_PACKET_SIZE,pCurrentBuf+nBufCount);     //在双缓冲方式，一次可以向FIFO写两个数据包
+ 544   2                      UWrite_Byte(INDEX, 1);
+C51 COMPILER V9.00   BULK_ONLY                                                             05/31/2015 23:23:18 PAGE 10  
+
+ 545   2                      UWrite_Byte(EINCSRL, rbInINPRDY);
+ 546   2              }
+ 547   1              else if(Transfer_Length>0)
+ 548   1              {
+ 549   2      
+ 550   2                      //Flash_Read_Page(nCurrentBlock,nCurrentPage,Bulk_PACKET,512);
+ 551   2      //              K9FReadPageData();
+ 552   2                      NF_ReadSectorToBuff(LBA.val,Bulk_READ);
+ 553   2                      AES_jiemi(Bulk_READ,Bulk_READ);
+ 554   2                      LBA.val++;
+ 555   2                      Transfer_Length--;
+ 556   2                      nBufCount=0;
+ 557   2                      pCurrentBuf=Bulk_READ;
+ 558   2                      Bulk_Status=BULK_DATA_TRANS;
+ 559   2                      Fifo_Write(FIFO_EP1,EP1_PACKET_SIZE,pCurrentBuf+nBufCount);//在双缓冲方式，一次可以向FIFO写两个数据包
+ 560   2                      UWrite_Byte(INDEX, 1);
+ 561   2                      UWrite_Byte(EINCSRL, rbInINPRDY);       
+ 562   2              }
+ 563   1              else
+ 564   1              {
+ 565   2                      Bulk_Status=BULK_DATA_END;
+ 566   2                      nBufCount=0;
+ 567   2                      TransCSW();
+ 568   2              }
+ 569   1      }
+ 570          /////////////////////////////////////////////////////////////////////////////////////////////////
+ 571          void SCSI_Write10(void)
+ 572          {
+ 573   1              unsigned int i=0;
+ 574   1              unsigned int uiTemp;
+ 575   1      
+ 576   1              LED=~LED;
+ 577   1              LBA.val = Bulk_Buffer.Bulk_CBW.CBWCB.addr.l;
+ 578   1              Transfer_Length = Bulk_Buffer.Bulk_CBW.CBWCB.length;
+ 579   1              
+ 580   1              nCurrentBlock = (LBA.val)/256;          //计算FLASH的物理地址,当前块号
+ 581   1              uiTemp = (LBA.val)%256;
+ 582   1      
+ 583   1              
+ 584   1              nCurrentPage  = uiTemp/4;               //计算当前页号
+ 585   1      //      uiTemp %= 4;
+ 586   1      
+ 587   1              nCurrentSectorOffsetInPage = uiTemp % 4;        //求出当前页内的偏移
+ 588   1      
+ 589   1              LBA.bits.block = Bufer_Block;
+ 590   1              LBA.bits.page = nCurrentPage;
+ 591   1              nBegainPage = nCurrentPage;
+ 592   1              nBegainSectorOffsetInPage = nCurrentSectorOffsetInPage ;
+ 593   1      
+ 594   1              Bulk_Status = BULK_DATA_RECIEVE;
+ 595   1              //pCurrentBuf = Bulk_Buffer.Bulk_PACKET;
+ 596   1              nBufCount   = 0;
+ 597   1      
+ 598   1      //      K9FEraseBlockData(Bufer_Block<<5);                      //擦除缓冲区BLOCK
+ 599   1              NandFlash_EraseBlock(Bufer_Block);                      //擦除缓冲区BLOCK,入口参数指定块号
+ 600   1      }
+ 601          
+ 602          void Bulk_Receive_Data()                  /*计算机到U盘*/
+ 603          {
+ 604   1              unsigned int i=0;
+ 605   1              //Copy(pCurrentBuf+nBufCount,Bulk_Buffer,EP2_PACKET_SIZE);
+ 606   1              nBufCount+=EP2_PACKET_SIZE;
+C51 COMPILER V9.00   BULK_ONLY                                                             05/31/2015 23:23:18 PAGE 11  
+
+ 607   1              //pCurrentBuf
+ 608   1              usb_buf+=EP2_PACKET_SIZE;
+ 609   1                                                                       
+ 610   1              if(nBufCount==512)                                                      //如果一扇区内容接收完毕
+ 611   1              {
+ 612   2                      AES_jiami(Bulk_Buffer.Bulk_PACKET,Bulk_Buffer.Bulk_PACKET);                                                                       // 在这里添加加密函数
+ 613   2                      if(nBegainSectorOffsetInPage!= 0)  //处理如果不是从页的第1个扇区开始位置写
+ 614   2                      {
+ 615   3                              ulong ulTempSectorCount;
+ 616   3                               //计算当前扇区的绝对位置
+ 617   3                              ulTempSectorCount = nCurrentBlock *(256)+ nBegainPage*4 + nBegainSectorOffsetInPage;
+ 618   3      
+ 619   3                              ulTempSectorCount--;    //查找前1个扇区的位置
+ 620   3                              if(nBegainSectorOffsetInPage == 1)
+ 621   3                              {
+ 622   4                                        NF_ReadSectorToBuff(ulTempSectorCount, ucNFPageBuff);
+ 623   4                              }
+ 624   3                              else if(nBegainSectorOffsetInPage == 2)
+ 625   3                              {
+ 626   4                                      NF_ReadSectorToBuff(ulTempSectorCount, ucNFPageBuff+512);
+ 627   4                                      ulTempSectorCount--;
+ 628   4                                      NF_ReadSectorToBuff(ulTempSectorCount, ucNFPageBuff);
+ 629   4                              }
+ 630   3                              else if(nBegainSectorOffsetInPage == 3)
+ 631   3                              {
+ 632   4                                      NF_ReadSectorToBuff(ulTempSectorCount, ucNFPageBuff+1024);
+ 633   4                                      ulTempSectorCount--;
+ 634   4                                      NF_ReadSectorToBuff(ulTempSectorCount, ucNFPageBuff+512);
+ 635   4                                      ulTempSectorCount--;
+ 636   4                                      NF_ReadSectorToBuff(ulTempSectorCount, ucNFPageBuff);
+ 637   4      
+ 638   4                              }
+ 639   3                              //
+ 640   3                              nBegainSectorOffsetInPage =0;
+ 641   3      
+ 642   3                      }
+ 643   2      
+ 644   2                      //LBA.bits.block = Bufer_Block;
+ 645   2                      if(nCurrentSectorOffsetInPage == 0)
+ 646   2                      {
+ 647   3                              uint uiTemp;
+ 648   3      
+ 649   3                              for(uiTemp=0; uiTemp<512; uiTemp++)
+ 650   3                              {
+ 651   4                                      ucNFPageBuff[uiTemp] = Bulk_Buffer.Bulk_PACKET[uiTemp];
+ 652   4                              }
+ 653   3                              nCurrentSectorOffsetInPage++;
+ 654   3                      }
+ 655   2                      else if(nCurrentSectorOffsetInPage == 1)
+ 656   2                      {
+ 657   3                              uint uiTemp;
+ 658   3      
+ 659   3                              for(uiTemp=0; uiTemp<512; uiTemp++)
+ 660   3                              {
+ 661   4                                      ucNFPageBuff[uiTemp+512] = Bulk_Buffer.Bulk_PACKET[uiTemp];
+ 662   4                              }
+ 663   3                              nCurrentSectorOffsetInPage++;
+ 664   3                      }
+ 665   2                      else if(nCurrentSectorOffsetInPage == 2)
+ 666   2                      {
+ 667   3                              uint uiTemp;
+ 668   3      
+C51 COMPILER V9.00   BULK_ONLY                                                             05/31/2015 23:23:18 PAGE 12  
+
+ 669   3                              for(uiTemp=0; uiTemp<512; uiTemp++)
+ 670   3                              {
+ 671   4                                      ucNFPageBuff[uiTemp+1024] = Bulk_Buffer.Bulk_PACKET[uiTemp];
+ 672   4                              }
+ 673   3                              nCurrentSectorOffsetInPage++;
+ 674   3                      }
+ 675   2                      else if(nCurrentSectorOffsetInPage == 3)
+ 676   2                      {
+ 677   3                              uint uiTemp;
+ 678   3      
+ 679   3                              for(uiTemp=0; uiTemp<512; uiTemp++)
+ 680   3                              {
+ 681   4                                      ucNFPageBuff[uiTemp+1536] = Bulk_Buffer.Bulk_PACKET[uiTemp];
+ 682   4                              }
+ 683   3      
+ 684   3      
+ 685   3                              NandFlash_WritePage((Bufer_Block*64+nCurrentPage)*4l);
+ 686   3                              nCurrentSectorOffsetInPage = 0;
+ 687   3                              nCurrentPage++;                                                 //页指针加1
+ 688   3      
+ 689   3                      }
+ 690   2      
+ 691   2              //      K9FProgramData(Bulk_Buffer.Bulk_PACKET);
+ 692   2                      //Flash_Write_Page(Bufer_Block,nCurrentPage,Bulk_PACKET,512);   //将数据暂时写到缓冲区BLOCK     
+ 693   2                      LBA.val++;
+ 694   2                      Transfer_Length--;                                              //待传输数据长度减1
+ 695   2      
+ 696   2                      nBufCount=0;                                                    //清空数据缓冲区
+ 697   2                      usb_buf = Bulk_Buffer.Bulk_PACKET;
+ 698   2              }
+ 699   1      //if(Transfer_Length==0x18)
+ 700   1      //{
+ 701   1      //      i++;                                       
+ 702   1      //}
+ 703   1              if((Transfer_Length>0)&&(nCurrentPage == 64))           //如果一个BLOCK写完毕
+ 704   1              {
+ 705   2                      
+ 706   2                      LBA.bits.page=0;
+ 707   2                      for(i=0;i<nBegainPage;i++)
+ 708   2                      {
+ 709   3                              //LBA.bits.block = nCurrentBlock;
+ 710   3                              //K9FReadPageData();
+ 711   3                              //LBA.bits.block = Bufer_Block;
+ 712   3                              //K9FProgramData(Bulk_READ);
+ 713   3                              
+ 714   3                              NF_ReadPage((nCurrentBlock*64+i)*4l);
+ 715   3                              NandFlash_WritePage((Bufer_Block*64+i)*4l);
+ 716   3              //              LBA.val++;
+ 717   3                              //Flash_Read_Page(nCurrentBlock,i,Bulk_PACKET,512);
+ 718   3                              //Flash_Write_Page(Bufer_Block,i,Bulk_PACKET,512);
+ 719   3                      }
+ 720   2                      //K9FEraseBlockData(nCurrentBlock<<5);
+ 721   2                      NandFlash_EraseBlock(nCurrentBlock);                    //擦除缓冲区BLOCK,入口参数指定块号
+ 722   2              
+ 723   2                      
+ 724   2                      LBA.bits.page = 0;
+ 725   2                      //将缓冲数据块中的内容拷贝会当前有效数据块
+ 726   2                      for(i=0;i<64;i++)
+ 727   2                      {
+ 728   3              //              LBA.bits.block = Bufer_Block;
+ 729   3              //              K9FReadPageData();
+ 730   3              //              LBA.bits.block = nCurrentBlock;
+C51 COMPILER V9.00   BULK_ONLY                                                             05/31/2015 23:23:18 PAGE 13  
+
+ 731   3              //              K9FProgramData(Bulk_READ);
+ 732   3              //              LBA.val++;
+ 733   3                              NF_ReadPage((Bufer_Block *64+i)*4l);
+ 734   3                              NandFlash_WritePage((nCurrentBlock*64+i)*4l);
+ 735   3                      }
+ 736   2              //      nCurrentBlock=LBA.bits.block;
+ 737   2                      nCurrentBlock++;                //指向下1个数据块
+ 738   2                      nCurrentPage=0;
+ 739   2                      nBufCount=0;
+ 740   2                      nBegainPage=0;
+ 741   2      //              LBA.bits.block = Bufer_Block;
+ 742   2      //              K9FEraseBlockData(Bufer_Block<<5);                      //擦除缓冲区BLOCK
+ 743   2                      NandFlash_EraseBlock(Bufer_Block);                      //擦除缓冲区BLOCK,入口参数指定块号
+ 744   2                      
+ 745   2              }
+ 746   1      
+ 747   1              if(Transfer_Length==0)
+ 748   1              {  //最后1包的处理
+ 749   2                      LBA.bits.page=0;
+ 750   2      
+ 751   2                 //处理当前页内后半部分，1页中有4个扇区，将当前扇区索引号到页尾的内容拷贝到待写页中
+ 752   2                      if(nCurrentSectorOffsetInPage!= 0)  //处理当前页内扇区索引号为1，2，3的情况
+ 753   2                      {
+ 754   3                              ulong ulTempSectorCount;
+ 755   3                               //计算当前扇区的绝对位置
+ 756   3                              ulTempSectorCount = nCurrentBlock *(256)+ nCurrentPage*4 + nCurrentSectorOffsetInPage;
+ 757   3              
+ 758   3              //              ulTempSectorCount--;    //查找前1个扇区的位置
+ 759   3                              //读取USB数据填充到写缓冲区时，扇区偏移已经加1了。
+ 760   3                              if(nCurrentSectorOffsetInPage == 1)
+ 761   3                              {
+ 762   4                                      NF_ReadSectorToBuff(ulTempSectorCount, ucNFPageBuff+512);
+ 763   4                                      
+ 764   4                                      ulTempSectorCount++;
+ 765   4                                      NF_ReadSectorToBuff(ulTempSectorCount, ucNFPageBuff+1024);
+ 766   4      
+ 767   4                                      ulTempSectorCount++;
+ 768   4                                      NF_ReadSectorToBuff(ulTempSectorCount, ucNFPageBuff+1536);
+ 769   4      
+ 770   4                              }
+ 771   3                              else if(nCurrentSectorOffsetInPage == 2)
+ 772   3                              {
+ 773   4                                      NF_ReadSectorToBuff(ulTempSectorCount, ucNFPageBuff+1024);
+ 774   4      
+ 775   4                                      ulTempSectorCount++;
+ 776   4                                      NF_ReadSectorToBuff(ulTempSectorCount, ucNFPageBuff+1536);
+ 777   4                              }
+ 778   3                              else if(nCurrentSectorOffsetInPage == 3)
+ 779   3                              {
+ 780   4                                      NF_ReadSectorToBuff(ulTempSectorCount, ucNFPageBuff+1536);      
+ 781   4                              }
+ 782   3                              //将当前页写入缓冲扇区区
+ 783   3                              NandFlash_WritePage((Bufer_Block*64+nCurrentPage)*4l);
+ 784   3                              nCurrentPage++;                 //指向下一页
+ 785   3      
+ 786   3                              nCurrentSectorOffsetInPage =0;
+ 787   3                      }               
+ 788   2      
+ 789   2                      //处理前半部分页
+ 790   2                      for(i=0;i<nBegainPage;i++)
+ 791   2                      {
+ 792   3      //                      LBA.bits.block = nCurrentBlock;
+C51 COMPILER V9.00   BULK_ONLY                                                             05/31/2015 23:23:18 PAGE 14  
+
+ 793   3      //                      K9FReadPageData();
+ 794   3      //                      LBA.bits.block = Bufer_Block;
+ 795   3      //                      K9FProgramData(Bulk_READ);
+ 796   3      //                      LBA.val++;
+ 797   3                              NF_ReadPage((nCurrentBlock*64+i)*4l);
+ 798   3                              NandFlash_WritePage((Bufer_Block*64+i)*4l);
+ 799   3      
+ 800   3                      }
+ 801   2                      LBA.bits.page=nCurrentPage;
+ 802   2      
+ 803   2                      //处理后半部分页面
+ 804   2                      for(i=nCurrentPage;i<64;i++)
+ 805   2                      {
+ 806   3      //                      LBA.bits.block = nCurrentBlock;
+ 807   3      //                      K9FReadPageData();
+ 808   3      //                      LBA.bits.block = Bufer_Block;
+ 809   3      //                      K9FProgramData(Bulk_READ);
+ 810   3      //                      LBA.val++;
+ 811   3                              NF_ReadPage((nCurrentBlock*64+i)*4l);
+ 812   3                              NandFlash_WritePage((Bufer_Block*64+i)*4l);
+ 813   3                      }
+ 814   2      
+ 815   2      //              K9FEraseBlockData(nCurrentBlock<<5);
+ 816   2                      NandFlash_EraseBlock(nCurrentBlock);                    //擦除用户待改写区BLOCK,入口参数指定块号
+ 817   2      
+ 818   2                      LBA.bits.page = 0;
+ 819   2                      for(i=0;i<64;i++)
+ 820   2                      {
+ 821   3      //                      LBA.bits.block = Bufer_Block;
+ 822   3      //                      K9FReadPageData();
+ 823   3      //                      LBA.bits.block = nCurrentBlock;
+ 824   3      //                      K9FProgramData(Bulk_READ);
+ 825   3      //                      LBA.val++;
+ 826   3                              NF_ReadPage((Bufer_Block *64+i)*4l);
+ 827   3                              NandFlash_WritePage((nCurrentBlock*64+i)*4l);
+ 828   3                      }
+ 829   2                      TransCSW();                                       
+ 830   2              }
+ 831   1      }
+ 832          ////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   6581    ----
+   CONSTANT SIZE    =    590    ----
+   XDATA SIZE       =   1826     143
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

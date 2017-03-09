@@ -1,0 +1,98 @@
+C51 COMPILER V9.00   USB_ISR                                                               05/31/2015 23:23:17 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE USB_ISR
+OBJECT MODULE PLACED IN Usb_Isr.OBJ
+COMPILER INVOKED BY: D:\learning\C51\BIN\C51.EXE Usb_Isr.c LARGE BROWSE DEBUG OBJECTEXTEND
+
+line level    source
+
+   1          #include "c8051F340.h"
+   2          #include "stdio.h"
+   3          #include "intrins.h"
+   4          /////////////////////////////
+   5          #include "Usb_FunDec.h"
+   6          #include "Usb_Parameter.h"
+   7          #include "Usb_Register.h"
+   8          #include "Usb_Request.h"
+   9          
+  10          extern unsigned char  Ep_Status[3];     
+  11          extern unsigned char  USB_State;                
+  12          extern unsigned char  Bulk_Status;              
+  13          
+  14          void Usb_Isr() interrupt 8
+  15          {
+  16   1          unsigned char bCommon, bIn, bOut;
+  17   1          URead_Byte(CMINT, bCommon);                 //读中断寄存器
+  18   1          URead_Byte(IN1INT, bIn);
+  19   1              URead_Byte(OUT1INT, bOut);
+  20   1              ///////////////////////////////////////////////////////////////////////////////////////
+  21   1              if (bCommon & rbRSUINT)           // 处理恢复中断
+  22   1          {
+  23   2      //              printf("This is a Resume Interrupt\n");
+  24   2                      Usb_Resume();
+  25   2          }
+  26   1          if (bCommon & rbRSTINT)           // 处理复位中断t
+  27   1          {
+  28   2      //              printf("Reset Interrupt\n");
+  29   2                      Usb_Reset();
+  30   2          }
+  31   1              if (bCommon & rbSUSINT)           // 处理挂起中断
+  32   1          {
+  33   2      //              printf("This is a Susint Interrupt\n");
+  34   2              Usb_Suspend();
+  35   2          }
+  36   1              ///////////////////////////////////////////////////////////////////////////////////////
+  37   1          if (bIn & rbEP0)                                            // 如果是端点0中断
+  38   1          {
+  39   2      //              printf("This is a EP0 Interrupt\n");
+  40   2              Handle_Setup();                                         // 调用端点0中断处理函数
+  41   2          }
+  42   1              ///////////////////////////////////////////////////////////////////////////////////////
+  43   1          if (bIn & rbIN1)                                            // 如果是端点1中断
+  44   1          { 
+  45   2      //              printf("This is a EdPoint1 Interrupt\n");                                      
+  46   2                      Handle_In1();                                                           // 调用端点1中断处理函数
+  47   2          }
+  48   1              ///////////////////////////////////////////////////////////////////////////////////////
+  49   1          if (bOut & rbOUT2)                                          // 如果是端点2中断
+  50   1          { 
+  51   2      //              printf("This is a EdPoint2 Interrupt\n");                                      
+  52   2              Handle_Out2();                                                          // 调用端点2中断处理函数
+  53   2          }   
+  54   1      
+  55   1      }
+C51 COMPILER V9.00   USB_ISR                                                               05/31/2015 23:23:17 PAGE 2   
+
+  56          
+  57          void Usb_Reset()
+  58          {
+  59   1              USB_State = DEV_DEFAULT;             // 设备到默认状态
+  60   1              UWrite_Byte(POWER, 0x00);            
+  61   1              Ep_Status[0] = EP_IDLE;              // 端点到空闲状态
+  62   1              Ep_Status[1] = EP_HALT;
+  63   1              Ep_Status[2] = EP_HALT;
+  64   1              Bulk_Status  = BULK_IDLE;                        // 批量传输端点状态到空闲状态
+  65   1      }
+  66          void Usb_Suspend()
+  67          {
+  68   1              // 此开发中没涉及到相关的操作
+  69   1      }
+  70          void Usb_Resume()
+  71          {
+  72   1              // 此开发中没涉及到相关的操作
+  73   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    194    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----       3
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

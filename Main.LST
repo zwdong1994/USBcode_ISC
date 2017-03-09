@@ -1,0 +1,194 @@
+C51 COMPILER V9.00   MAIN                                                                  05/31/2015 23:23:16 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN Main.OBJ
+COMPILER INVOKED BY: D:\learning\C51\BIN\C51.EXE Main.c LARGE BROWSE DEBUG OBJECTEXTEND
+
+line level    source
+
+   1           
+   2           #include "C8051F340.h"
+   3          #include <stdio.h>
+   4          
+   5          #include "Usb_FunDec.h"
+   6          #include "Usb_Parameter.h"
+   7          #include "Usb_Register.h"
+   8          #include "Usb_Request.h"
+   9          
+  10          #define uchar unsigned char
+  11          #define uint unsigned int
+  12          #define ulong unsigned long
+  13          
+  14          sbit OutBusy = P1^0;
+  15          unsigned char re;
+  16          unsigned char a='0';
+  17          int t=0;
+  18          void SystemClkInit(void)
+  19          {
+  20   1              int i = 0;
+  21   1      
+  22   1              OSCICN |= 0x11;         //默认值为8分频，切换到12M全速运行
+  23   1          CLKMUL    = 0x80;           //允许4倍乘法器
+  24   1          for (i = 0; i < 20; i++);    // Wait 5us for initialization
+  25   1          CLKMUL    |= 0xC0;                    //初始化4倍乘法器
+  26   1          while ((CLKMUL & 0x20) == 0);                                  //等待RDY位
+  27   1          CLKSEL    = 0x03;                                             //系统时钟选择48Mhz
+  28   1      //    CLKSEL    = 0x02;                         //系统时钟选24Mhz
+  29   1      //    CLKSEL    = 0x00;                         //系统时钟选内部12Mhz
+  30   1      }
+  31          
+  32          void  TimerInit(void)
+  33          {
+  34   1              TMOD = 0x21;            //定时器1工作在8位自动重载，0工作在16位模式
+  35   1              CKCON = 0x00;           //定时器0和定时器1使用12分频系统时钟
+  36   1              TH1 = 0x30;                     //9600bps        4000000/208/2 = 9615
+  37   1              TL1 = 0x30;                     //9600bps        4000000/208/2 = 9615
+  38   1              TR1 = 1;
+  39   1      }
+  40          
+  41          #define c_TH0_1Ms_Value 0xF0
+  42          //#define c_TL0_1Ms_Value 0x60          //理论计算值
+  43          #define c_TL0_1Ms_Value 0x80            //修正误差
+  44          
+  45          //65536 -4000 =61536=0xF060
+  46          //毫秒级延时函数
+  47          //备注：以7.373M为基准
+  48          void Delay(uchar ucCount)
+  49          {
+  50   1              while(ucCount--)
+  51   1              {
+  52   2                              
+  53   2                      TH0 = c_TH0_1Ms_Value;
+  54   2                      TL0 = c_TL0_1Ms_Value;
+  55   2                      TR0 =1;
+C51 COMPILER V9.00   MAIN                                                                  05/31/2015 23:23:16 PAGE 2   
+
+  56   2                      while(TF0 == 0);
+  57   2                      TR0 = 0;
+  58   2                      TF0 = 0;
+  59   2              }
+  60   1      }
+  61          
+  62          
+  63          
+  64          void UART0Init(void)
+  65          {
+  66   1              SCON0 = 0x10;
+  67   1              TI0 = 1;
+  68   1      }
+  69          
+  70          #if 1
+  71          void WriteOneByte(unsigned char ucWriteData)
+  72          {
+  73   1              while(TI0 == 0);
+  74   1              TI0 = 0;
+  75   1              SBUF0 = ucWriteData;
+  76   1      
+  77   1      }
+  78          
+  79          unsigned char recieve(void)
+  80          {
+  81   1              while(RI0 == 0);
+  82   1              RI0 = 0;
+  83   1              re = SBUF0;
+  84   1              return re;
+  85   1      }
+  86          
+  87          #endif
+  88          
+  89          void PORT_Init (void)
+  90          {
+  91   1              
+  92   1              P0MDIN |= 0xFF;                 //1配置为数字，0配置为模拟
+  93   1              P1MDIN |= 0xFF;                 //1配置为数字
+  94   1      //      P2MDIN |= 0xFF;
+  95   1              P3MDIN |= 0xff;                 //1配置为数字，0配置为模拟
+  96   1              P4MDIN = 0xff;
+  97   1      //
+  98   1      //      P0MDOUT = 0x7E;                 //p0.0 TDI_IN IS INPUT
+  99   1      //      P1MDOUT = 0x5D;                 //p1.1,p1.5,P1.7 INPUT
+ 100   1      //      P2MDOUT = 0xFF;
+ 101   1          P1MDOUT   = 0xfb;           //P1.2 INPUT
+ 102   1      
+ 103   1              P0MDOUT = 0xff;            //1配置为推挽输出
+ 104   1      
+ 105   1              P3MDOUT = 0xff;            //1配置为推挽输出
+ 106   1              P4MDOUT = 0xFF;                 //配置为开漏输出
+ 107   1      //      P0 |= 0x01;
+ 108   1      //      P1 |= 0XA2;                                       
+ 109   1              XBR0 |= 0x01;           //UART0连接到端口
+ 110   1              XBR1    = 0x40;     // Enable crossbar and enable  weak pull-ups
+ 111   1      }
+ 112          
+ 113          #if 0
+              void Delay(void)
+              {
+                      ulong ulCount;
+              
+C51 COMPILER V9.00   MAIN                                                                  05/31/2015 23:23:16 PAGE 3   
+
+                      for(ulCount= 0; ulCount<0x1ffff; ulCount++)
+                      {
+                              ;
+                      }
+              }
+              #endif
+ 124          
+ 125          void TestNandFlash(void);
+ 126          void NandFlash_Reset(void);                                                  //flash reset
+ 127          
+ 128           void main(void)
+ 129           {
+ 130   1          PCA0MD &= ~0x40;                    // WDTE = 0 (clear watchdog timer
+ 131   1      
+ 132   1      
+ 133   1      
+ 134   1              SystemClkInit();                 // enable)
+ 135   1              PORT_Init();
+ 136   1              TimerInit();
+ 137   1              UART0Init();
+ 138   1              
+ 139   1               
+ 140   1      //       WriteOneByte('K');
+ 141   1              
+ 142   1              printf("Hello world\r\n");
+ 143   1              NandFlash_Reset();
+ 144   1              Usb_Init();                                     // USB初始化
+ 145   1              EA=1;                           
+ 146   1      
+ 147   1              while(1)
+ 148   1              {
+ 149   2                      OutBusy = 1;
+ 150   2      //              P4 = 0xff;
+ 151   2                      Delay(250);
+ 152   2                      Delay(250);
+ 153   2                      Delay(250);
+ 154   2                      Delay(250);
+ 155   2                      OutBusy = 0;
+ 156   2      //              P4 = 0x00;
+ 157   2                      
+ 158   2                      Delay(250);
+ 159   2                      Delay(250);
+ 160   2                      Delay(250);
+ 161   2                      Delay(250);
+ 162   2      
+ 163   2      //              printf("OK!\r\n");
+ 164   2      //              TestNandFlash();
+ 165   2              }
+ 166   1      
+ 167   1       }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    191    ----
+   CONSTANT SIZE    =     14    ----
+   XDATA SIZE       =      4    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

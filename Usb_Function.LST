@@ -1,0 +1,78 @@
+C51 COMPILER V9.00   USB_FUNCTION                                                          05/31/2015 23:23:17 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE USB_FUNCTION
+OBJECT MODULE PLACED IN Usb_Function.OBJ
+COMPILER INVOKED BY: D:\learning\C51\BIN\C51.EXE Usb_Function.c LARGE BROWSE DEBUG OBJECTEXTEND
+
+line level    source
+
+   1          #include "c8051F340.h"
+   2          #include "stdio.h"
+   3          #include "intrins.h"
+   4          /////////////////////////////
+   5          #include "Usb_FunDec.h"
+   6          #include "Usb_Parameter.h"
+   7          #include "Usb_Register.h"
+   8          #include "Usb_Request.h"
+   9          //////////////////////////////////////////////////////////////////////////////////////
+  10          void Usb_Init()
+  11          {
+  12   1              UWrite_Byte(POWER, 0x08);       // 异步复位
+  13   1      
+  14   1          UWrite_Byte(IN1IE, 0x03);       // 允许端点0中断和端点1IN中断
+  15   1          UWrite_Byte(OUT1IE,0x04);           // 允许端点2OUT中断
+  16   1          UWrite_Byte(CMIE, 0x04);        // 允许复位中断，禁止挂起中断和恢复中断
+  17   1              USB0XCN=0xe0;                                   // USB收发器使能，上拉电阻使能，全速，正常工作方式
+  18   1              UWrite_Byte(CLKREC,0x80);               // USB时钟恢复使能，正常校准方式，全速方式
+  19   1      
+  20   1              EIE1 |= 0x02;                   // 允许USB中断
+  21   1              UWrite_Byte(POWER,0x00);                // 禁止ISO，允许USB工作、禁止挂起功能
+  22   1      }
+  23                              
+  24          void Fifo_Read(unsigned char addr, unsigned int uNumBytes, unsigned char *pData)
+  25          {
+  26   1              unsigned int i;
+  27   1              USB0ADR  = (addr & 0x3f);                       //设置地址   
+  28   1              while(USB0ADR & 0x80)   //判断是否结束
+  29   1              {}             
+  30   1              for(i=0;i< uNumBytes;i++)
+  31   1              {
+  32   2                      USB0ADR |= 0x80;                //启动读操作                  
+  33   2              while(USB0ADR & 0x80)   //判断是否结束
+  34   2                      {}          
+  35   2              pData[i] = USB0DAT;              
+  36   2              }
+  37   1              USB0ADR = 0;                    //停止读，将地址清零               
+  38   1      }
+  39          
+  40          void Fifo_Write(unsigned char addr, unsigned int uNumBytes, unsigned char *pData)
+  41          {
+  42   1         int i;
+  43   1         USB0ADR  = addr;                     //设置地址           
+  44   1         for(i=0;i< uNumBytes;i++)
+  45   1         {
+  46   2              while(USB0ADR & 0x80)   //判断是否结束
+  47   2                      {}          
+  48   2              USB0DAT=pData[i];              
+  49   2         }
+  50   1         USB0ADR = 0;                         //地址清零           
+  51   1                                                
+  52   1      }
+  53          ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+C51 COMPILER V9.00   USB_FUNCTION                                                          05/31/2015 23:23:17 PAGE 2   
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    226    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----      10
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
